@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend/backend
+    build: ./backend
     container_name: colmados_backend
     restart: always
     depends_on:
@@ -23,7 +23,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      -  ./backend/backend:/app
+      -  ./backend:/app
 
 volumes:
   postgres_data:
