@@ -141,3 +141,144 @@ La app estará disponible en `http://localhost:4200`.
 
 Este proyecto es de uso académico / personal. Licencia por definir.
 
+# EN
+# 🏪 Sistema para Colmados
+
+> A modern management system for neighborhood corner stores ("colmados") in the Dominican Republic — replacing pen-and-paper bookkeeping with inventory tracking, sales, and automated credit ("fiao") reminders.
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Angular](https://img.shields.io/badge/Angular-latest-DD0031?logo=angular&logoColor=white)](https://angular.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+
+---
+
+## 📖 About the project
+
+Many *colmados* still track sales, stock, and customer debt ("fiao") on paper. This means lost records, no visibility into who owes what, and no easy way to follow up with customers.
+
+**Sistema para Colmados** is a lightweight, affordable SaaS platform that brings this daily workflow online — designed to be simple enough for an owner to use straight from their phone, with no learning curve.
+
+### Core features
+
+| Module | Description |
+|---|---|
+| 📦 **Inventory** | Track products, categories, stock levels, and low-stock alerts |
+| 🧾 **Sales (POS)** | Fast point-of-sale flow with cart, totals, and payment methods |
+| 💳 **Fiao (Credit)** | Track customer debt, partial payments (abonos), and credit limits |
+| 📲 **WhatsApp reminders** | Automatic debt-reminder messages sent to customers |
+| 📊 **Reports** | Sales by period, best-selling products, outstanding debt overview |
+| 🔐 **Authentication** | JWT-based login with role-based access |
+
+---
+
+## 🛠️ Tech stack
+
+**Backend**
+- Python + FastAPI
+- SQLAlchemy + Alembic (migrations)
+- PostgreSQL
+- JWT authentication
+
+**Frontend**
+- Angular + Angular Material / PrimeNG
+
+**Integrations**
+- Twilio API / WhatsApp Business Cloud API
+
+**Infrastructure**
+- Docker & Docker Compose
+- GitHub Actions (CI/CD)
+
+---
+
+## 📂 Project structure
+
+```
+sistema-colmados/
+├── backend/
+│   ├── app/
+│   │   ├── core/          # config, database, security
+│   │   ├── models/        # SQLAlchemy models
+│   │   ├── schemas/        # Pydantic schemas
+│   │   ├── routers/        # API endpoints per module
+│   │   └── services/       # business logic
+│   ├── alembic/            # database migrations
+│   └── Dockerfile
+├── frontend/
+│   └── src/app/
+│       ├── inventario/      # Inventory module
+│       ├── ventas/          # Sales module
+│       ├── fiao/            # Credit / debt module
+│       └── reportes/        # Reports module
+├── docs/
+│   └── modelo-datos.dbml    # database schema (DBML)
+└── docker-compose.yml
+```
+
+---
+
+## 🚀 Getting started
+
+### Prerequisites
+- Docker & Docker Compose
+- Node.js + Angular CLI (for frontend development)
+
+### Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-username/sistema-colmados.git
+cd sistema-colmados
+
+# 2. Configure environment variables
+cp backend/.env.example backend/.env
+# edit backend/.env with your own SECRET_KEY and WhatsApp credentials
+
+# 3. Start the backend + database
+docker compose up --build
+```
+
+The API will be available at `http://localhost:8000`, with interactive docs at `http://localhost:8000/docs`.
+
+```bash
+# 4. Run database migrations
+docker compose exec backend alembic upgrade head
+
+# 5. Start the frontend (in a separate terminal)
+cd frontend
+npm install
+ng serve
+```
+
+The app will be available at `http://localhost:4200`.
+
+---
+
+## 👥 Team & module ownership
+
+| Person | Module |
+|---|---|
+| P1 | Inventory & Products |
+| P2 | Sales & Point of Sale |
+| P3 | Fiao (Credit) + WhatsApp |
+| P4 | Reports + Infrastructure / Tech Lead |
+
+---
+
+## 🌱 Roadmap
+
+- [x] Project setup & Docker environment
+- [x] JWT authentication
+- [ ] Inventory CRUD
+- [ ] Point of sale flow
+- [ ] Fiao & WhatsApp reminders
+- [ ] Reports dashboard
+
+---
+
+## 📄 License
+
+This project is for academic / personal use. License to be defined.
+
