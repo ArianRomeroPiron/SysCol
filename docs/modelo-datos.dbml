@@ -1,0 +1,199 @@
+// ==========================
+// TABLA CATEGORIAS
+// ==========================
+
+Table Categoria {
+  id_categoria int [pk, increment]
+  nombre varchar
+  descripcion varchar [null]
+  estado boolean
+}
+
+// ==========================
+// TABLA PRODUCTOS
+// ==========================
+
+Table Productos {
+  id_producto int [pk, increment]
+  id_categoria int
+  codigo_barras varchar [unique, null]
+  nombre varchar
+  marca varchar [null]
+  variante_descripcion varchar [null]
+  precio_venta decimal
+  estado boolean
+}
+
+// ==========================
+// TABLA PROVEEDORES
+// ==========================
+
+Table Proveedores {
+  id_proveedor int [pk, increment]
+  nombre varchar
+  telefono varchar
+  correo varchar [null]
+  direccion varchar
+  estado boolean
+}
+
+// ==========================
+// TABLA COMPRAS
+// ==========================
+
+Table Compras {
+  id_compra int [pk, increment]
+  numero_factura varchar
+  id_proveedor int
+  fecha date
+  subtotal decimal
+  impuesto decimal
+  total decimal
+  observaciones varchar [null]
+}
+
+// ==========================
+// TABLA DETALLE COMPRA
+// ==========================
+
+Table DetalleCompra {
+  id_detalle int [pk, increment]
+  id_compra int
+  id_producto int
+  cantidad int
+  precio_compra decimal
+  subtotal decimal
+}
+
+// ==========================
+// TABLA INVENTARIO
+// ==========================
+
+Table Inventario {
+  id_inventario int [pk, increment]
+  id_producto int
+  stock_actual int
+  stock_minimo int
+  stock_maximo int
+  ultima_actualizacion datetime
+}
+
+// ==========================
+// TABLA CLIENTES
+// ==========================
+
+Table Clientes {
+  id_cliente int [pk, increment]
+  nombre varchar
+  telefono varchar [null]
+  correo varchar [null]
+  direccion varchar [null]
+  limite_credito decimal [default: 0]     // <-- nuevo: tope de fiao permitido
+  estado boolean
+}
+
+// ==========================
+// TABLA VENTAS
+// ==========================
+
+Table Ventas {
+  id_venta int [pk, increment]
+  id_cliente int [null]
+  fecha datetime
+  subtotal decimal
+  impuesto decimal
+  total decimal
+  metodo_pago varchar          // 'efectivo', 'tarjeta', 'fiao', etc.
+}
+
+// ==========================
+// TABLA DETALLE VENTA
+// ==========================
+
+Table DetalleVenta {
+  id_detalle int [pk, increment]
+  id_venta int
+  id_producto int
+  cantidad int
+  precio_venta decimal
+  subtotal decimal
+}
+
+// ==========================
+// TABLA ROLES
+// ==========================
+
+Table Roles {
+  id_rol int [pk, increment]
+  nombre varchar
+  descripcion varchar [null]
+}
+
+// ==========================
+// TABLA USUARIOS
+// ==========================
+
+Table Usuarios {
+  id_usuario int [pk, increment]
+  id_rol int
+  nombre varchar
+  apellido varchar
+  username varchar [unique]
+  email varchar [unique]
+  password_hash varchar
+  estado boolean
+}
+
+// ==========================
+// TABLA DEUDAS (FIAO)
+// ==========================
+
+Table Deuda {
+  id_deuda int [pk, increment]
+  id_cliente int
+  id_venta int [unique]           // una deuda nace de una venta al fiao
+  monto_total decimal
+  monto_pagado decimal [default: 0]
+  saldo_pendiente decimal
+  fecha_creacion datetime
+  fecha_limite date [null]        // fecha acordada de pago, si aplica
+  estado varchar                  // 'pendiente', 'parcial', 'pagada', 'vencida'
+}
+
+// ==========================
+// TABLA ABONOS
+// ==========================
+
+Table Abono {
+  id_abono int [pk, increment]
+  id_deuda int
+  monto decimal
+  fecha datetime
+  metodo_pago varchar             // 'efectivo', 'transferencia', etc.
+  nota varchar [null]
+}
+
+// ==========================
+// RELACIONES
+// ==========================
+
+Ref: Productos.id_categoria > Categoria.id_categoria
+
+Ref: Compras.id_proveedor > Proveedores.id_proveedor
+
+Ref: DetalleCompra.id_compra > Compras.id_compra
+Ref: DetalleCompra.id_producto > Productos.id_producto
+
+Ref: Inventario.id_producto > Productos.id_producto
+
+Ref: Ventas.id_cliente > Clientes.id_cliente
+
+Ref: DetalleVenta.id_venta > Ventas.id_venta
+Ref: DetalleVenta.id_producto > Productos.id_producto
+
+Ref: Usuarios.id_rol > Roles.id_rol
+
+Ref: Deuda.id_cliente > Clientes.id_cliente
+Ref: Deuda.id_venta > Ventas.id_venta
+Ref: Abono.id_deuda > Deuda.id_deuda
+
