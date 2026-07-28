@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.models.rol import Rol
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.dependencies import get_current_user
@@ -11,16 +12,24 @@ from app.schemas.usuario import Token, UsuarioCreate, UsuarioOut
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 
+
 @router.post("/register", response_model=UsuarioOut)
 def registrar_usuario(datos: UsuarioCreate, db: Session = Depends(get_db)):
     existente = db.query(Usuario).filter(Usuario.email == datos.email).first()
     if existente:
         raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
 
+    rol_cajero = db.query(Rol).filter(Rol.nombre == "cajero").first()
+    if rol_cajero is None:
+        raise HTTPException(
+            status_code=500, detail="No existe el rol por defecto 'cajero'"
+        )
+
     nuevo_usuario = Usuario(
         nombre=datos.nombre,
         email=datos.email,
         hashed_password=hash_password(datos.password),
+        id_rol=rol_cajero.id_rol,
     )
     db.add(nuevo_usuario)
     db.commit()

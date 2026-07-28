@@ -1,6 +1,15 @@
 from pydantic import BaseModel
 
 
+class RolOut(BaseModel):
+    id_rol: int
+    nombre: str
+    descripcion: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class UsuarioBase(BaseModel):
     nombre: str
     email: str
@@ -12,8 +21,8 @@ class UsuarioCreate(UsuarioBase):
 
 class UsuarioOut(UsuarioBase):
     id: int
-    rol: str
     esta_activo: bool
+    rol: RolOut
 
     class Config:
         from_attributes = True
