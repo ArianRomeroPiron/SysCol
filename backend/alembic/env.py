@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models import *  # Esto importa tus modelos
 from alembic import context
+from app.models import usuario, venta  # y los demás modelos que ya existan
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
