@@ -12,7 +12,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# Función para obtener la sesión de la base de datos en las rutas de FastAPI
+# Función para obtener la ses lol ión de la base de datos en las rutas de FastAPI
 def get_db():
     db = SessionLocal()
     try:
