@@ -1,17 +1,17 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
-class UsuarioBase(BaseModel):
+class UsuarioCreate(BaseModel):
     nombre: str
-    email: str
-
-
-class UsuarioCreate(UsuarioBase):
+    email: EmailStr
     password: str
+    rol: str = "cajero"  # "admin", "cajero", "dueno"
 
 
-class UsuarioOut(UsuarioBase):
+class UsuarioOut(BaseModel):
     id: int
+    nombre: str
+    email: EmailStr
     rol: str
     esta_activo: bool
 
@@ -22,3 +22,8 @@ class UsuarioOut(UsuarioBase):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
