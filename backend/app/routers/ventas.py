@@ -58,4 +58,4 @@ def obtener_venta(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    return db.query(Venta).filter(Venta.id_venta == id_venta).first()
+    return db.query(Venta).filter(Venta.id == id_venta).first()

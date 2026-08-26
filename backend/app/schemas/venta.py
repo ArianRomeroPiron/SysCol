@@ -16,7 +16,7 @@ class VentaCreate(BaseModel):
 
 
 class DetalleVentaOut(BaseModel):
-    id_detalle: int
+    id: int
     id_producto: int
     cantidad: int
     precio_venta: Decimal
@@ -27,7 +27,7 @@ class DetalleVentaOut(BaseModel):
 
 
 class VentaOut(BaseModel):
-    id_venta: int
+    id: int
     id_cliente: int | None
     fecha: datetime
     subtotal: Decimal
