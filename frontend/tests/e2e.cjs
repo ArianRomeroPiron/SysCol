@@ -49,6 +49,7 @@ const assert = require("node:assert/strict");
     .click();
   await page.getByText("10 disponibles", { exact: false }).waitFor();
   await page.getByRole("button", { name: "👥 Clientes", exact: true }).click();
+  await page.getByRole("heading", { name: "Tus clientes", exact: true }).waitFor();
   await page.locator("[name=nombre]").fill("Ana Pérez");
   await page.locator("[name=telefono]").fill("+18095551234");
   await page.locator("[name=limite]").fill("200");
