@@ -1,21 +1,24 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+
 from app.core.config import settings
 
-# Crea el motor de conexión usando la URL del .env
-engine = create_engine(settings.database_url)
+engine = create_engine(settings.database_url, pool_pre_ping=True)
+if engine.dialect.name == "sqlite":
 
-# Configura la sesión para interactuar con la base de datos
+    @event.listens_for(engine, "connect")
+    def foreign_keys(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
+
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# ¡Esta es la variable Base que Alembic está buscando!
 Base = declarative_base()
 
 
-# Función para obtener la ses lol ión de la base de datos en las rutas de FastAPI
 def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    with SessionLocal() as db:
+        try:
+            yield db
+        except Exception:
+            db.rollback()
+            raise

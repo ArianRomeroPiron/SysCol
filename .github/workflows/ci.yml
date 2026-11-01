@@ -1,0 +1,83 @@
+name: CI
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: syscol
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: syscol_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U syscol -d syscol_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://syscol:test-password@localhost:5432/syscol_test
+      TEST_DATABASE_URL: postgresql+psycopg://syscol:test-password@localhost:5432/syscol_test
+      SECRET_KEY: ci-only-secret-never-use-this-in-production-123
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: alembic upgrade head
+      - run: alembic check
+      - run: pytest -q
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-compose-password
+      SECRET_KEY: ci-only-compose-secret-never-production-123456
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose up --build -d --wait
+      - name: Verify frontend and proxied API
+        run: |
+          curl -fsS http://localhost:8080/ | grep '<app-root>'
+          curl -fsS http://localhost:8080/api/ready
+          curl -fsS -X POST http://localhost:8080/api/auth/register -H 'Content-Type: application/json' --data '{"nombre":"CI","colmado":"CI Store","email":"ci@example.com","password":"ci-password-12345"}'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Browser end-to-end test
+        working-directory: frontend
+        env:
+          BASE_URL: http://localhost:8080
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down -v

@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+node_modules/
+.angular/
+*.db
+graphify-out/
+outputs/
+frontend/qa.cjs
+backups/
+*.dump
