@@ -350,7 +350,7 @@ def reports(
     desde: date, hasta: date, user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     manager(user)
-    if hasta < desde or (hasta - desde).days > 366:
+    if hasta == date.max or hasta < desde or (hasta - desde).days > 366:
         raise HTTPException(422, "Selecciona un período de hasta 366 días")
     # Reporting days use Dominican time, independent of the database session zone.
     local = timezone(timedelta(hours=-4))

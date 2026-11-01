@@ -9,6 +9,9 @@ const assert = require("node:assert/strict");
     viewport: { width: 1440, height: 1000 },
   });
   require("node:fs").mkdirSync("outputs", { recursive: true });
+  page.on('response', async response => {
+    if(response.status() >= 400) console.error('HTTP failure', response.url(), response.request().postData(), await response.text());
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.BASE_URL || "http://127.0.0.1:4200");

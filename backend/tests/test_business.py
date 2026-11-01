@@ -120,6 +120,19 @@ def test_roles_and_disabled_user(api):
 
 def test_pagination_and_input_validation(api):
     h = account(api)
+    assert (
+        api.post(
+            "/auth/register",
+            json={
+                "nombre": "Test",
+                "colmado": "x" * 121,
+                "email": "invalid-length@example.com",
+                "password": "correct-horse-123",
+            },
+        ).status_code
+        == 422
+    )
+    assert api.get("/reportes?desde=9999-12-31&hasta=9999-12-31", headers=h).status_code == 422
     assert api.get("/productos?limit=201", headers=h).status_code == 422
     assert api.post("/clientes", headers=h, json={"nombre": "", "telefono": "abc"}).status_code == 422
     assert api.get("/reportes?desde=2026-10-31&hasta=2026-10-01", headers=h).status_code == 422
