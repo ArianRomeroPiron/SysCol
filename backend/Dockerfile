@@ -1,18 +1,9 @@
-FROM python:3.12-slim
-
+FROM python:3.13-slim
 WORKDIR /app
-
-# Dependencias del sistema necesarias para psycopg2
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 COPY . .
-
+RUN useradd --create-home syscol && chown -R syscol:syscol /app
+USER syscol
 EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

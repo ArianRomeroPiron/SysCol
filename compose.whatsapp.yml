@@ -1,0 +1,17 @@
+services:
+  whatsapp:
+    build: ./backend
+    profiles: ['whatsapp']
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://syscol:${POSTGRES_PASSWORD}@db:5432/syscol
+      SECRET_KEY: ${SECRET_KEY}
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-false}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_NUMBER:-}
+      TWILIO_CONTENT_SID: ${TWILIO_CONTENT_SID:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    command: [sh, -c, 'while true; do python -m app.services.whatsapp_service; sleep 86400; done']

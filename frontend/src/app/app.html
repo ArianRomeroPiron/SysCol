@@ -1,0 +1,93 @@
+@if (!user()) {
+<main class="welcome">
+  <section class="intro"><a class="brand" href="/">▦ SysCol</a><p class="eyebrow">HECHO PARA TU COLMADO</p><h1>Tu negocio,<br>con las cuentas claras.</h1><p>Inventario, ventas y fiao en un solo lugar.<br>Menos cuentas en papel. Más control de tu día.</p><div class="feature">📦 Inventario al día <span>✓</span></div><div class="feature">🧾 Ventas sin complicaciones <span>✓</span></div><div class="feature">💳 El fiao, bajo control <span>✓</span></div><small>Tus datos se mantienen separados de otros colmados.</small></section>
+  <section class="login"><p class="eyebrow">BIENVENIDO A SYSCOL</p><h2>{{registering?'Abre tu colmado digital':'Vamos a trabajar'}}</h2><p>{{registering?'Crea la cuenta del dueño para comenzar.':'Ingresa para llevar tu negocio al día.'}}</p>
+  <form (ngSubmit)="login()">
+    @if(registering){<label>Tu nombre<input name="nombre" [(ngModel)]="credentials.nombre" required maxlength="160" autocomplete="name"></label><label>Nombre del colmado<input name="colmado" [(ngModel)]="credentials.colmado" required maxlength="120"></label>}
+    <label>Correo electrónico<input name="email" type="email" [(ngModel)]="credentials.email" required autocomplete="username"></label>
+    <label>Contraseña<input name="password" type="password" [(ngModel)]="credentials.password" required [minlength]="registering?12:1" maxlength="128" [autocomplete]="registering?'new-password':'current-password'"></label>
+    @if(registering){<small>Usa al menos 12 caracteres.</small>}
+    <button class="primary" [disabled]="busy()">{{busy()?'Un momento…':registering?'Crear mi colmado':'Entrar a mi colmado'}} →</button>
+  </form><button class="text" (click)="registering=!registering">{{registering?'Ya tengo una cuenta':'Crear una cuenta de dueño'}}</button>
+  </section>
+</main>
+} @else {
+<header><a class="brand" href="/">▦ SysCol</a><span class="greeting">Hola, {{user()!['nombre']}} <small>{{user()!['rol']==='dueno'?'Dueño':user()!['rol']}}</small></span><button [disabled]="busy()" (click)="logout()">Cerrar sesión</button></header>
+<div class="workspace">
+<nav aria-label="Navegación principal">
+  <p class="eyebrow">TU COLMADO</p>
+  @for(item of [['ventas','🧾','Punto de venta'],['inventario','📦','Inventario'],['clientes','👥','Clientes'],['fiao','💳','Fiao y abonos'],['historial','↗','Historial de ventas']];track item[0]){<button [class.selected]="tab()===item[0]" (click)="navigate(item[0])">{{item[1]}} <span>{{item[2]}}</span></button>}
+  @if(isManager()){<button [class.selected]="tab()==='reportes'" (click)="navigate('reportes')">▥ <span>Reportes</span></button>}
+  @if(user()!['rol']==='dueno'){<button [class.selected]="tab()==='equipo'" (click)="navigate('equipo')">⚙ <span>Mi equipo</span></button>}
+  <div class="navfoot">CUENTAS CLARAS.<br>NEGOCIO AL DÍA.</div>
+</nav>
+<main class="content" [attr.aria-busy]="busy()">
+  <p class="eyebrow">ADMINISTRACIÓN DEL COLMADO</p>
+  <h1>{{tab()==='ventas'?'Una nueva venta':tab()==='inventario'?'Tu inventario':tab()==='clientes'?'Tus clientes':tab()==='fiao'?'Fiao y abonos':tab()==='historial'?'Historial de ventas':tab()==='reportes'?'Así va tu negocio':'Tu equipo'}}</h1>
+  @if(tab()==='ventas'||tab()==='inventario'){
+    <form class="search" (ngSubmit)="offset=0;run(load.bind(this))"><input aria-label="Buscar producto" name="search" [(ngModel)]="search" placeholder="Buscar por nombre o código de barras"><button [disabled]="busy()">Buscar</button></form>
+    <div [class.pos]="tab()==='ventas'">
+    <section class="productgrid">
+      @for(p of products();track p['id']){
+      <article class="productcard"><div class="producticon">▦</div><h3>{{p['nombre']}}</h3><p class="price">{{money(p['precio_venta'])}}</p><p [class.low]="p['stock']<=p['stock_minimo']">{{p['stock']}} disponibles {{!p['activo']?' · Inactivo':''}}</p>
+      @if(tab()==='ventas'){<button (click)="add(p)" [disabled]="busy()||!p['activo']||p['stock']<1">+ Agregar</button>}
+      @else if(isManager()){
+      <button (click)="product={...p}">Editar producto</button>
+      <label>Ajuste de unidades<input type="number" [(ngModel)]="stockValues[p['id']]" aria-label="Cantidad de ajuste"></label>
+      <label>Motivo<input [(ngModel)]="stockReasons[p['id']]" maxlength="200" placeholder="Compra, merma…"></label><button [disabled]="busy()" (click)="adjust(p)">Registrar ajuste</button>}
+      </article>
+      } @empty {<p class="empty">No hay productos en esta página. Agrega productos desde Inventario.</p>}
+    </section>
+    @if(tab()==='ventas'){
+      <aside class="cart panel"><h2>Venta actual <small>{{cart().length}} productos</small></h2>
+      @for(item of cart();track item.id_producto){<div class="cartline"><div><strong>{{item.nombre}}</strong><p>{{item.cantidad}} × {{money(item.precio)}}</p></div><button [attr.aria-label]="'Quitar '+item.nombre" (click)="remove(item.id_producto)">×</button></div>} @empty {<p class="empty">Agrega productos para comenzar.</p>}
+      <label>Buscar cliente<input [(ngModel)]="customerSearch" placeholder="Nombre o teléfono"></label><button (click)="findCustomers()" [disabled]="busy()">Buscar cliente</button><label>Cliente<select aria-label="Cliente" [(ngModel)]="customerId"><option [ngValue]="null">Venta sin cliente</option>@for(c of customers();track c['id']){<option [ngValue]="c['id']">{{c['nombre']}}</option>}</select></label>
+      <small>Busca por nombre o teléfono para encontrar cualquier cliente.</small>
+      <label>Método de pago<select aria-label="Método de pago" [(ngModel)]="method"><option value="efectivo">Efectivo</option><option value="tarjeta">Tarjeta</option><option value="transferencia">Transferencia</option><option value="fiao">Fiao</option></select></label>
+      <div class="total"><span>Total</span><strong>{{money(total())}}</strong></div><small>Precios finales. El cobro con tarjeta se registra; no procesa el pago.</small><button class="primary" (click)="checkout()" [disabled]="busy()||!cart().length">Registrar venta →</button>
+      </aside>}
+    </div>
+    @if(tab()==='inventario'&&isManager()){
+    <section class="panel"><h2>{{product['id']?'Editar producto':'Agregar producto'}}</h2><form class="fields" (ngSubmit)="saveProduct()">
+      <label>Nombre<input name="nombre" [(ngModel)]="product['nombre']" required maxlength="160"></label>
+      <label>Categoría<select aria-label="Categoría" name="categoria" [(ngModel)]="product['id_categoria']" required><option [ngValue]="null">Selecciona</option>@for(c of categories();track c['id']){<option [ngValue]="c['id']">{{c['nombre']}}</option>}</select></label>
+      <label>Código de barras<input name="codigo" [(ngModel)]="product['codigo_barras']" maxlength="80"></label>
+      <label>Costo de compra<input name="compra" type="number" step="0.01" min="0" required [(ngModel)]="product['precio_compra']"></label>
+      <label>Precio final de venta<input name="precio" type="number" step="0.01" min="0" required [(ngModel)]="product['precio_venta']"></label>
+      <label>Alerta de stock<input name="minimo" type="number" min="0" required [(ngModel)]="product['stock_minimo']"></label>
+      <label class="check"><input name="activo" type="checkbox" [(ngModel)]="product['activo']">Producto activo</label>
+      <button class="primary" [disabled]="busy()">Guardar producto</button><button type="button" (click)="product=newProduct()">Limpiar</button>
+    </form><h3>Nueva categoría</h3><form class="search" (ngSubmit)="saveCategory()"><input aria-label="Nombre de categoría" name="categoria" [(ngModel)]="category" required maxlength="120"><button [disabled]="busy()">Agregar categoría</button></form></section>}
+  }
+  @if(tab()==='clientes'){<form class="search" (ngSubmit)="offset=0;run(load.bind(this))"><input name="busquedaCliente" aria-label="Buscar cliente" [(ngModel)]="customerSearch" placeholder="Nombre o teléfono"><button [disabled]="busy()">Buscar</button></form>
+  <section class="panel"><h2>{{customer['id']?'Editar cliente':'Agregar cliente'}}</h2><form class="fields" (ngSubmit)="saveCustomer()">
+    <label>Nombre<input name="nombre" [(ngModel)]="customer['nombre']" required maxlength="160"></label>
+    <label>Teléfono con código de país<input type="tel" name="telefono" [(ngModel)]="customer['telefono']" placeholder="+18095551234" required pattern="\+[1-9][0-9]{7,14}"></label>
+    <label>Límite de crédito<input name="limite" type="number" step="0.01" min="0" [(ngModel)]="customer['limite_credito']" required></label>
+    <label class="check"><input type="checkbox" name="consentimiento" [(ngModel)]="customer['consentimiento_whatsapp']">Autoriza recordatorios por WhatsApp</label>
+    <button class="primary" [disabled]="busy()">Guardar cliente</button><button type="button" (click)="customer=newCustomer()">Limpiar</button>
+  </form></section>
+  <section class="panel scroll"><table><thead><tr><th>Cliente</th><th>Teléfono</th><th>Límite</th><th>Debe</th><th>Acciones</th></tr></thead><tbody>@for(c of customers();track c['id']){<tr><td data-label="Cliente">{{c['nombre']}}</td><td data-label="Teléfono">{{c['telefono']}}</td><td data-label="Límite">{{money(c['limite_credito'])}}</td><td data-label="Debe">{{money(c['saldo'])}}</td><td data-label="Acciones">@if(isManager()){<button (click)="customer={...c}">Editar</button>}<button [disabled]="busy()||!c['consentimiento_whatsapp']||+c['saldo']<=0" (click)="whatsapp(c)">WhatsApp ↗</button></td></tr>}</tbody></table></section>
+  }
+  @if(tab()==='fiao'){
+  <p>Registra abonos parciales o salda una deuda. Los recordatorios se envían manualmente desde Clientes.</p>
+  <section class="panel scroll"><table><thead><tr><th>Cliente</th><th>Venta</th><th>Deuda original</th><th>Pendiente</th><th>Registrar abono</th></tr></thead><tbody>@for(d of debts();track d['id']){<tr><td data-label="Cliente">{{customerName(d['id_cliente'])}}</td><td data-label="Venta">#{{d['id_venta']}}</td><td data-label="Deuda original">{{money(d['monto_total'])}}</td><td data-label="Pendiente">{{money(d['saldo_pendiente'])}}</td><td data-label="Registrar abono"><form (ngSubmit)="pay(d)" class="search"><input [attr.aria-label]="'Abono deuda '+d['id']" [name]="'abono'+d['id']" type="number" min="0.01" step="0.01" [max]="d['saldo_pendiente']" [(ngModel)]="paymentValues[d['id']]" required><button [disabled]="busy()||+d['saldo_pendiente']<=0">Abonar</button></form></td></tr>}</tbody></table></section>
+  <section class="panel"><h2>Historial de abonos</h2>@for(p of payments();track p['id']){<p>Abono #{{p['id']}} · Deuda #{{p['id_deuda']}} · {{money(p['monto'])}} · {{p['fecha']|date:'short':'-0400'}}</p>}@empty{<p>No hay abonos en esta página.</p>}</section>
+  }
+  @if(tab()==='historial'){
+  <section class="panel scroll"><table><thead><tr><th>Venta</th><th>Fecha</th><th>Pago</th><th>Total</th><th>Recibo</th></tr></thead><tbody>@for(s of sales();track s['id']){<tr><td data-label="Venta">#{{s['id']}}</td><td data-label="Fecha">{{s['fecha']|date:'short':'-0400'}}</td><td data-label="Pago">{{s['metodo_pago']}}</td><td data-label="Total">{{money(s['total'])}}</td><td data-label="Recibo"><button (click)="receipt.set(s)">Ver recibo</button></td></tr>}</tbody></table></section>
+  }
+  @if(tab()==='reportes'){
+  <form class="search" (ngSubmit)="run(load.bind(this))"><label>Desde<input name="desde" type="date" [(ngModel)]="from" required></label><label>Hasta<input name="hasta" type="date" [(ngModel)]="to" required></label><button [disabled]="busy()">Ver reporte</button></form>
+  @if(report();as r){<div class="stats"><article class="panel"><p>Ventas del período</p><strong>{{r['ventas']}}</strong></article><article class="panel"><p>Total vendido</p><strong>{{money(r['total'])}}</strong></article><article class="panel"><p>Fiao pendiente actual</p><strong>{{money(r['deuda_pendiente'])}}</strong></article></div><section class="panel"><h2>Productos más vendidos</h2>@for(p of r['productos'];track $index){<div class="cartline"><span>{{p.nombre}} · {{p.cantidad}} unidades</span><strong>{{money(p.total)}}</strong></div>}@empty{<p>No hay ventas en este período.</p>}</section>}
+  }
+  @if(tab()==='equipo'){
+  <section class="panel"><h2>Agregar empleado</h2><form class="fields" (ngSubmit)="saveEmployee()"><label>Nombre<input name="nombre" [(ngModel)]="employee.nombre" required></label><label>Correo<input name="email" type="email" [(ngModel)]="employee.email" required></label><label>Contraseña inicial<input name="password" type="password" [(ngModel)]="employee.password" minlength="12" required autocomplete="new-password"></label><label>Rol<select name="rol" [(ngModel)]="employee.rol"><option value="cajero">Cajero</option><option value="admin">Administrador</option></select></label><button class="primary" [disabled]="busy()">Crear empleado</button></form></section>
+  <section class="panel">@for(e of employees();track e['id']){<div class="cartline"><span>{{e['nombre']}} · {{e['rol']}} · {{e['esta_activo']?'Activo':'Inactivo'}}</span>@if(e['rol']!=='dueno'){<button [disabled]="busy()" (click)="toggle(e)">{{e['esta_activo']?'Desactivar':'Activar'}}</button>}</div>}</section>
+  }
+  @if(!['reportes','equipo'].includes(tab())){<div class="pagination"><button [disabled]="busy()||offset===0" (click)="next(-1)">← Anterior</button><span>Página {{offset/pageSize+1}}</span><button [disabled]="busy()" (click)="next(1)">Siguiente →</button></div>}
+</main></div>
+@if(receipt();as r){<section class="receipt panel" role="dialog" aria-label="Recibo de venta"><h2>SysCol · Recibo #{{r['id']}}</h2><p>{{r['fecha']|date:'medium':'-0400'}} · {{r['metodo_pago']}}</p>@for(d of r['detalles'];track d.id){<p>{{d.nombre}} × {{d.cantidad}} <strong>{{money(d.subtotal)}}</strong></p>}<h3>Total: {{money(r['total'])}}</h3><small>Comprobante interno. No es una factura fiscal.</small><div class="actions"><button (click)="print()">Imprimir</button><button (click)="receipt.set(null)">Cerrar</button></div></section>}
+}
+@if(error()){<div class="toast error" role="alert">{{error()}}<button aria-label="Cerrar error" (click)="error.set('')">×</button></div>}
+@if(notice()){<div class="toast" role="status">{{notice()}}<button aria-label="Cerrar aviso" (click)="notice.set('')">×</button></div>}
