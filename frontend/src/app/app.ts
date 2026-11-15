@@ -65,6 +65,118 @@ export class App {
   receipt = signal<Row | null>(null);
   private token = "";
 
+  /** Trazos de iconos (24×24, estilo línea) dibujados en el propio SVG. */
+  readonly icons: Record<string, string> = {
+    store:
+      "M2 7l4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4M2 7h20M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7",
+    ventas:
+      "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1ZM16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11",
+    inventario:
+      "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73zM12 22V12M3.29 7 12 12l8.71-5M7.5 4.27l9 5.15",
+    clientes:
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M5 7a4 4 0 1 0 8 0 4 4 0 1 0-8 0M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+    fiao: "M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4M2 6h4M2 10h4M2 14h4M2 18h4M21.38 5.63a1 1 0 1 0-3-3l-5.02 5a2 2 0 0 0-.5.86l-.84 2.87a.5.5 0 0 0 .62.62l2.87-.84a2 2 0 0 0 .86-.5z",
+    historial: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2",
+    reportes: "M3 3v16a2 2 0 0 0 2 2h16M18 17V9M13 17V5M8 17v-3",
+    equipo:
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M5 7a4 4 0 1 0 8 0 4 4 0 1 0-8 0M19 8v6M22 11h-6",
+    search: "M3 11a8 8 0 1 0 16 0 8 8 0 1 0-16 0M21 21l-4.3-4.3",
+    plus: "M5 12h14M12 5v14",
+    x: "M18 6 6 18M6 6l12 12",
+    logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+    chat: "M7.9 20A9 9 0 1 0 4 16.1L2 22Z",
+    print:
+      "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6M6 14h12v8H6z",
+    arrow: "M5 12h14M12 5l7 7-7 7",
+    left: "m15 18-6-6 6-6",
+    right: "m9 18 6-6-6-6",
+    edit: "M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z",
+    alert:
+      "M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
+    check: "M20 6 9 17l-5-5",
+  };
+
+  readonly sections: Record<string, { title: string; desc: string }> = {
+    ventas: {
+      title: "Una nueva venta",
+      desc: "Busca el producto, agrégalo a la cuenta y cobra.",
+    },
+    inventario: {
+      title: "Tu inventario",
+      desc: "Lo que hay en el colmado, a qué precio y cuándo reponer.",
+    },
+    clientes: {
+      title: "Tus clientes",
+      desc: "La gente del barrio, su límite de fiao y lo que deben.",
+    },
+    fiao: {
+      title: "Fiao y abonos",
+      desc: "Registra abonos parciales o salda una deuda. Los recordatorios se envían manualmente desde Clientes.",
+    },
+    historial: {
+      title: "Historial de ventas",
+      desc: "Cada venta registrada, con su recibo listo para imprimir.",
+    },
+    reportes: {
+      title: "Así va tu negocio",
+      desc: "Ventas, total vendido y fiao pendiente del período que elijas.",
+    },
+    equipo: {
+      title: "Tu equipo",
+      desc: "Quién trabaja contigo y qué puede hacer en SysCol.",
+    },
+  };
+
+  nav = computed(() => {
+    const items = [
+      { id: "ventas", label: "Punto de venta", short: "Vender" },
+      { id: "inventario", label: "Inventario", short: "Inventario" },
+      { id: "clientes", label: "Clientes", short: "Clientes" },
+      { id: "fiao", label: "Fiao y abonos", short: "Fiao" },
+      { id: "historial", label: "Historial de ventas", short: "Historial" },
+    ];
+    if (this.isManager())
+      items.push({ id: "reportes", label: "Reportes", short: "Reportes" });
+    if (this.user()?.["rol"] === "dueno")
+      items.push({ id: "equipo", label: "Mi equipo", short: "Equipo" });
+    return items;
+  });
+
+  cartUnits = computed(() =>
+    this.cart().reduce((sum, x) => sum + x.cantidad, 0),
+  );
+
+  readonly methods: Record<string, string> = {
+    efectivo: "Efectivo",
+    tarjeta: "Tarjeta",
+    transferencia: "Transferencia",
+    fiao: "Fiao",
+  };
+  readonly roles: Record<string, string> = {
+    dueno: "Dueño",
+    admin: "Administrador",
+    cajero: "Cajero",
+  };
+
+  categoryName(id: number) {
+    return this.categories().find((c) => c["id"] === id)?.["nombre"] || "";
+  }
+  initial(text: string) {
+    return (text || "?").trim().charAt(0).toUpperCase();
+  }
+  /** Tono estable por categoría para reconocer los productos de un vistazo. */
+  tint(id: number) {
+    return "tint-" + (Math.abs(Number(id) || 0) % 6);
+  }
+  percent(part: any, whole: any) {
+    const w = Number(whole) || 0;
+    if (w <= 0) return 0;
+    return Math.min(100, Math.max(0, Math.round((Number(part) / w) * 100)));
+  }
+  qtyInCart(id: number) {
+    return this.cart().find((x) => x.id_producto === id)?.cantidad || 0;
+  }
+
   newProduct(): Row {
     return {
       nombre: "",

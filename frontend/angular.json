@@ -12,7 +12,7 @@
             "browser": "src/main.ts",
             "index": "src/index.html",
             "tsConfig": "tsconfig.json",
-            "styles": ["src/styles.css"],
+            "styles": ["@fontsource-variable/figtree/wght.css", "src/styles.css"],
             "outputPath": "dist/syscol"
           },
           "configurations": {
