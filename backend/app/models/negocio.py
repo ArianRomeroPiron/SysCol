@@ -83,6 +83,9 @@ class Venta(Base):
     impuesto = Column(Numeric(14, 2), nullable=False, default=0)
     total = Column(Numeric(14, 2), nullable=False)
     metodo_pago = Column(String(20), nullable=False)
+    anulada_en = Column(DateTime(timezone=True), nullable=True)
+    anulada_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    motivo_anulacion = Column(String(200), nullable=True)
     detalles = relationship("DetalleVenta", cascade="all, delete-orphan", lazy="selectin")
 
 

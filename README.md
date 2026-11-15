@@ -4,13 +4,13 @@ Gestión de inventario, ventas y fiao para colmados dominicanos, con interfaz ad
 
 ## Funciones implementadas
 
-- Cuentas de dueños y empleados; roles dueño, administrador y cajero. Los usuarios desactivados pierden acceso incluso con un token vigente.
+- Cuentas de dueños y empleados; roles dueño, administrador y cajero. El dueño cambia roles y restablece contraseñas; cada usuario cambia la suya. Los usuarios desactivados pierden acceso incluso con un token vigente.
 - Separación de datos por colmado en consultas y operaciones.
 - Categorías, productos, precios finales, códigos de barras, ajustes auditados de existencias y avisos de bajo inventario. Desactivar un producto conserva su historial.
-- Punto de venta con carrito, efectivo, tarjeta, transferencia o fiao. El servidor determina precios, verifica existencias y registra todo en una transacción.
+- Punto de venta con búsqueda en vivo, lector de código de barras, filtro por categoría, cantidades editables y cálculo de devuelta. Efectivo, tarjeta, transferencia o fiao. El servidor determina precios, verifica existencias y registra todo en una transacción. Recargar la página no pierde la venta en curso.
 - Clientes, límites de crédito, historial de deudas, abonos parciales e idempotencia para reintentos de ventas y abonos.
-- Historial de ventas y recibos internos imprimibles.
-- Reportes por período: cantidad y total de ventas, productos más vendidos y deuda pendiente actual. Los días del reporte corresponden a República Dominicana.
+- Historial de ventas con cliente y vendedor, recibos internos imprimibles y anulación completa de ventas por dueño o administrador (devuelve existencias y cancela fiao sin abonos).
+- Reportes por período: cantidad y total de ventas, desglose por forma de pago, abonos recibidos, productos más vendidos y deuda pendiente actual. Las ventas anuladas no se cuentan. Los días del reporte corresponden a República Dominicana.
 - Recordatorios manuales por WhatsApp; integración automática opcional con Twilio, desactivada por defecto.
 - Migraciones Alembic, despliegue Docker Compose, configuración HTTPS opcional y GitHub Actions con pruebas PostgreSQL, compilación Angular y prueba de despliegue.
 
@@ -53,7 +53,7 @@ npm ci
 npm start
 ```
 
-Abre `http://localhost:4200`. El proxy envía `/api` al backend local. Las sesiones permanecen en memoria: al recargar o cerrar la página hay que iniciar sesión otra vez. No almacenes tokens manualmente en el navegador.
+Abre `http://localhost:4200`. El proxy envía `/api` al backend local. La sesión se guarda en `sessionStorage` de la pestaña: sobrevive a recargar y se borra al cerrar la pestaña. Detalles y riesgos en [docs/MEJORAS.md](docs/MEJORAS.md).
 
 ## Pruebas
 
@@ -77,7 +77,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Resultados y límites de la validación: [docs/VALIDACION.md](docs/VALIDACION.md).
+Resultados y límites de la validación: [docs/VALIDACION.md](docs/VALIDACION.md). Cambios de diseño y uso, con capturas: [docs/MEJORAS.md](docs/MEJORAS.md).
 
 ## Operación con usuarios reales
 

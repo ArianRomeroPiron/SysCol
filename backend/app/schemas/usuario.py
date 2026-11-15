@@ -19,6 +19,10 @@ class UsuarioOut(UsuarioBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MeOut(UsuarioOut):
+    colmado: str = ""
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

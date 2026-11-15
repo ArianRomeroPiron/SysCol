@@ -26,6 +26,16 @@ class Employee(Input):
     rol: Literal["admin", "cajero"] = "cajero"
 
 
+class EmployeeUpdate(Input):
+    rol: Literal["admin", "cajero"] | None = None
+    password: str | None = Field(default=None, min_length=12, max_length=128)
+
+
+class PasswordChange(Input):
+    actual: str = Field(min_length=1, max_length=128)
+    nueva: str = Field(min_length=12, max_length=128)
+
+
 class Category(Input):
     nombre: str = Field(min_length=1, max_length=120)
 
@@ -67,3 +77,7 @@ class Sale(Input):
 class Payment(Input):
     referencia: UUID
     monto: Annotated[Decimal, Field(gt=0, max_digits=14, decimal_places=2)]
+
+
+class Void(Input):
+    motivo: str = Field(min_length=3, max_length=200)

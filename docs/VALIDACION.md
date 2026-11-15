@@ -30,3 +30,15 @@ Estos resultados verifican coherencia financiera, no una capacidad garantizada d
 - El motor Docker de esta computadora devuelve errores, por lo que aquí no se pudo ejecutar el despliegue completo en contenedores. El job de CI es la comprobación adicional para esa parte.
 - Queda una advertencia de deprecación de `httpx` en el cliente de pruebas de Starlette; no impide las pruebas ni afecta al cliente HTTP de producción.
 - Antes de comercializar hay que aclarar la licencia, verificar el alojamiento elegido y realizar una prueba piloto con el flujo y volumen de los clientes reales.
+
+## Validación de las mejoras de diseño y uso (15 de noviembre de 2026)
+
+Entorno: Windows 10, Python 3.13, Node 24, PostgreSQL 17 en un clúster temporal local, Edge (Playwright). Docker no estaba disponible en este equipo; el despliegue con Compose queda para el job `compose` de GitHub Actions. Datos ficticios.
+
+- Ruff sin errores. `alembic upgrade head` y `alembic check` sin diferencias con la nueva migración `623527437bba`.
+- 17 pruebas Python contra PostgreSQL: las 10 anteriores más anulación (efectivo y fiao, con y sin abonos, permisos y otro colmado), roles y contraseñas, cambio de contraseña propia, filtros de fiao/productos y desglose de reportes, y una prueba concurrente de anulación frente a abonos. Las pruebas concurrentes se ejecutaron 3 veces más sin fallos. Con SQLite: 14 pasan y 3 se omiten (requieren PostgreSQL).
+- Compilación de producción de Angular sin errores: 78 kB transferidos en la carga inicial.
+- `frontend/tests/e2e.cjs` reescrito y ejecutado dos veces seguidas con éxito: registro, producto con categoría y existencia inicial, entrada de mercancía, cliente con teléfono local, venta en efectivo por código de barras con devuelta, venta fiao que sobrevive a recargar la página, abono, anulación con retorno de existencias, navegación inferior en celular sin desbordamiento horizontal y sin errores JavaScript.
+- Revisión visual a 1440 × 900 y 390 × 844 de todas las secciones; capturas en `docs/capturas/`.
+
+No comprobado: impresoras térmicas y lectores de código físicos (el lector se simuló como teclado + Enter), Safari/iOS, lectores de pantalla y uso por colmaderos reales.
