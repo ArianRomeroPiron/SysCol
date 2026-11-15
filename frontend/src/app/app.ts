@@ -1,4 +1,4 @@
-import { Component, signal, computed } from "@angular/core";
+import { Component, OnDestroy, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 
@@ -9,7 +9,7 @@ type Row = Record<string, any>;
   imports: [CommonModule, FormsModule],
   templateUrl: "./app.html",
 })
-export class App {
+export class App implements OnDestroy {
   user = signal<Row | null>(null);
   tab = signal("ventas");
   busy = signal(false);
@@ -42,17 +42,26 @@ export class App {
   category = "";
   search = "";
   customerSearch = "";
+  /** Clientes encontrados por la última búsqueda en el punto de venta. */
+  customerMatches = signal<number | null>(null);
   async findCustomers() {
     await this.run(async () => {
-      this.customers.set(
-        await this.api(
-          "/clientes?limit=200&q=" + encodeURIComponent(this.customerSearch),
-        ),
+      const found: Row[] = await this.api(
+        "/clientes?limit=200&q=" + encodeURIComponent(this.customerSearch),
       );
+      this.customers.set(found);
+      const q = this.customerSearch.trim();
+      this.customerMatches.set(q ? found.length : null);
+      if (q && found.length === 1) this.customerId = found[0]["id"];
+      else if (!found.some((c) => c["id"] === this.customerId))
+        this.customerId = null;
     });
   }
   offset = 0;
+  paymentsOffset = 0;
   pageSize = 50;
+  /** Último término buscado, para explicar resultados vacíos. */
+  searched = signal("");
   customerId: number | null = null;
   method = "efectivo";
   reference = this.uuid();
@@ -265,9 +274,12 @@ export class App {
       this.user.set(await this.api("/auth/me"));
       this.credentials.password = "";
       await this.load();
+      this.startAutoRefresh();
     });
   }
   logout() {
+    this.stopAutoRefresh();
+    clearTimeout(this.searchTimer);
     this.token = "";
     this.user.set(null);
     this.cart.set([]);
@@ -289,13 +301,24 @@ export class App {
     this.stockValues = {};
     this.stockReasons = {};
     this.reference = this.uuid();
+    this.offset = 0;
+    this.paymentsOffset = 0;
+    this.search = "";
+    this.customerSearch = "";
+    this.searched.set("");
+    this.customerMatches.set(null);
     this.tab.set("ventas");
   }
   async navigate(tab: string) {
     if (this.busy()) return;
+    clearTimeout(this.searchTimer);
     this.tab.set(tab);
     this.offset = 0;
+    this.paymentsOffset = 0;
     this.search = "";
+    this.customerSearch = "";
+    this.searched.set("");
+    this.customerMatches.set(null);
     await this.run(() => this.load());
   }
   async load() {
@@ -308,9 +331,15 @@ export class App {
             "/productos" + query + "&q=" + encodeURIComponent(this.search),
           ),
         );
+        this.searched.set(this.search.trim());
         this.categories.set(await this.api("/categorias?limit=200"));
         if (this.tab() === "ventas")
-          this.customers.set(await this.api("/clientes?limit=200"));
+          this.customers.set(
+            await this.api(
+              "/clientes?limit=200&q=" +
+                encodeURIComponent(this.customerSearch),
+            ),
+          );
         break;
       case "clientes":
         this.customers.set(
@@ -321,10 +350,18 @@ export class App {
               encodeURIComponent(this.customerSearch),
           ),
         );
+        this.searched.set(this.customerSearch.trim());
         break;
       case "fiao":
         this.debts.set(await this.api("/deudas" + query));
-        this.payments.set(await this.api("/abonos" + query));
+        this.payments.set(
+          await this.api(
+            "/abonos?offset=" +
+              this.paymentsOffset +
+              "&limit=" +
+              this.pageSize,
+          ),
+        );
         this.customers.set(await this.api("/clientes?limit=200"));
         break;
       case "historial":
@@ -343,6 +380,99 @@ export class App {
   async next(delta: number) {
     this.offset = Math.max(0, this.offset + delta * this.pageSize);
     await this.run(() => this.load());
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async nextPayments(delta: number) {
+    this.paymentsOffset = Math.max(
+      0,
+      this.paymentsOffset + delta * this.pageSize,
+    );
+    await this.run(() => this.load());
+  }
+  /** Una página llena indica que puede haber más registros después. */
+  hasMore(rows: Row[]) {
+    return rows.length >= this.pageSize;
+  }
+
+  // Búsqueda mientras se escribe
+  private searchTimer?: ReturnType<typeof setTimeout>;
+  searchSoon(action: "lista" | "clientesVenta" = "lista") {
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      if (this.busy()) return this.searchSoon(action);
+      if (action === "clientesVenta") void this.findCustomers();
+      else void this.searchNow();
+    }, 300);
+  }
+  async searchNow() {
+    clearTimeout(this.searchTimer);
+    this.offset = 0;
+    await this.run(() => this.load());
+  }
+  clearSearch(field: "search" | "customerSearch") {
+    this[field] = "";
+    if (field === "customerSearch" && this.tab() === "ventas")
+      void this.findCustomers();
+    else void this.searchNow();
+  }
+
+  // Actualización automática: otros dispositivos (cajero, dueño) ven lo mismo.
+  private refreshTimer?: ReturnType<typeof setInterval>;
+  private refreshing = false;
+  private onVisible = () => {
+    if (document.visibilityState === "visible") void this.refresh();
+  };
+  startAutoRefresh() {
+    this.stopAutoRefresh();
+    this.refreshTimer = setInterval(() => void this.refresh(), 20000);
+    document.addEventListener("visibilitychange", this.onVisible);
+    window.addEventListener("focus", this.onVisible);
+  }
+  stopAutoRefresh() {
+    clearInterval(this.refreshTimer);
+    document.removeEventListener("visibilitychange", this.onVisible);
+    window.removeEventListener("focus", this.onVisible);
+  }
+  /** Recarga en silencio la sección actual, sin interrumpir lo que se hace. */
+  async refresh() {
+    if (
+      !this.user() ||
+      this.busy() ||
+      this.refreshing ||
+      this.receipt() ||
+      document.visibilityState !== "visible"
+    )
+      return;
+    this.refreshing = true;
+    try {
+      await this.load();
+    } catch {
+      // Silencioso: el próximo intento o la próxima acción mostrará el error.
+    } finally {
+      this.refreshing = false;
+    }
+  }
+  ngOnDestroy() {
+    this.stopAutoRefresh();
+    clearTimeout(this.searchTimer);
+  }
+  /** Lleva el formulario a la vista para editar. */
+  editProduct(p: Row) {
+    this.product = { ...p };
+    this.focusForm("product-form");
+  }
+  editCustomer(c: Row) {
+    this.customer = { ...c };
+    this.focusForm("customer-form");
+  }
+  private focusForm(id: string) {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      el?.querySelector<HTMLInputElement>("input")?.focus({
+        preventScroll: true,
+      });
+    });
   }
   add(p: Row) {
     if (!p["activo"] || p["stock"] < 1) return;
@@ -406,9 +536,11 @@ export class App {
   }
   async saveCategory() {
     await this.run(async () => {
-      await this.api("/categorias", "POST", { nombre: this.category });
+      const nombre = this.category.trim();
+      await this.api("/categorias", "POST", { nombre });
       this.category = "";
       await this.load();
+      this.notice.set("Categoría «" + nombre + "» agregada.");
     });
   }
   async adjust(p: Row) {
@@ -417,6 +549,8 @@ export class App {
         cantidad: Number(this.stockValues[p["id"]]),
         motivo: this.stockReasons[p["id"]] || "",
       });
+      delete this.stockValues[p["id"]];
+      delete this.stockReasons[p["id"]];
       await this.load();
       this.notice.set("Ajuste registrado.");
     });
@@ -466,6 +600,7 @@ export class App {
       await this.api("/auth/usuarios", "POST", this.employee);
       this.employee = { nombre: "", email: "", password: "", rol: "cajero" };
       await this.load();
+      this.notice.set("Empleado creado.");
     });
   }
   async toggle(e: Row) {
@@ -475,6 +610,9 @@ export class App {
         "PATCH",
       );
       await this.load();
+      this.notice.set(
+        e["nombre"] + (e["esta_activo"] ? " fue desactivado." : " fue activado."),
+      );
     });
   }
   print() {

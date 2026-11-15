@@ -152,3 +152,32 @@ def test_search_finds_customers_beyond_first_page(api):
     found = api.get("/clientes?q=Cliente%200249", headers=h).json()
     assert len(found) == 1
     assert found[0]["nombre"] == "Cliente 0249"
+
+
+def test_search_ignores_case_accents_and_wildcards(api):
+    h = account(api)
+    cat = api.post("/categorias", headers=h, json={"nombre": "Víveres"}).json()
+    for name, code in (("Café Molido", "7461234500017"), ("Azúcar crema", None), ("Jabón 100%", None)):
+        r = api.post(
+            "/productos",
+            headers=h,
+            json={
+                "nombre": name,
+                "id_categoria": cat["id"],
+                "codigo_barras": code,
+                "precio_compra": "10",
+                "precio_venta": "15",
+            },
+        )
+        assert r.status_code == 201, r.text
+    names = lambda q: [p["nombre"] for p in api.get("/productos", params={"q": q}, headers=h).json()]  # noqa: E731
+    assert names("cafe") == ["Café Molido"]
+    assert names("AZUCAR") == ["Azúcar crema"]
+    assert names("74612345") == ["Café Molido"]
+    assert names("100%") == ["Jabón 100%"]
+    assert names("%") == ["Jabón 100%"]
+    assert len(names("  ")) == 3
+    api.post("/clientes", headers=h, json={"nombre": "José Núñez", "telefono": "+18095550000"})
+    found = api.get("/clientes", params={"q": "jose nunez"}, headers=h).json()
+    assert [c["nombre"] for c in found] == ["José Núñez"]
+    assert len(api.get("/clientes", params={"q": "555000"}, headers=h).json()) == 1

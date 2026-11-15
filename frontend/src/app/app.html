@@ -165,20 +165,33 @@
         <p>{{sections[tab()].desc}}</p>
       </div>
       @if(tab()==='ventas'||tab()==='inventario'){
-      <form class="searchbar" (ngSubmit)="offset=0;run(load.bind(this))">
+      <form class="searchbar" role="search" (ngSubmit)="searchNow()">
         <div class="field">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
             <path [attr.d]="icons['search']" /></svg
           ><input
+            type="search"
             aria-label="Buscar producto"
             name="search"
+            autocomplete="off"
             [(ngModel)]="search"
+            (ngModelChange)="searchSoon()"
             placeholder="Buscar por nombre o código de barras"
-          />
+          />@if(search){<button
+            type="button"
+            class="clear"
+            aria-label="Borrar búsqueda"
+            (click)="clearSearch('search')"
+          >
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+              <path [attr.d]="icons['x']" />
+            </svg></button
+          >}
         </div>
         <button [disabled]="busy()">Buscar</button>
       </form>
       <div [class.pos]="tab()==='ventas'">
+        <div class="listcol">
         <section class="productgrid" aria-label="Productos">
           @for(p of products();track p['id']){
           <article
@@ -222,7 +235,7 @@
                 <path [attr.d]="icons['plus']" /></svg
               >Agregar</button
             >} @else if(isManager()){
-            <button class="subtle" (click)="product={...p}">
+            <button class="subtle" (click)="editProduct(p)">
               <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
                 <path [attr.d]="icons['edit']" /></svg
               >Editar producto
@@ -250,13 +263,39 @@
             <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
               <path [attr.d]="icons['inventario']" />
             </svg>
-            <p>
+            @if(searched()){<p>
+              No encontramos productos para «{{searched()}}». Prueba con otra
+              palabra o con el código de barras.
+            </p>
+            <button type="button" (click)="clearSearch('search')">
+              Ver todos los productos
+            </button>
+            } @else {<p>
               No hay productos en esta página. Agrega productos desde
               Inventario.
-            </p>
+            </p>}
           </div>
           }
         </section>
+        @if(offset>0||hasMore(products())){
+      <nav class="pagination" aria-label="Páginas">
+        <button
+          class="subtle"
+          [disabled]="busy()||offset===0"
+          (click)="next(-1)"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['left']" /></svg
+          >Anterior</button
+        ><span>Página {{offset/pageSize+1}}</span
+        ><button class="subtle" [disabled]="busy()||!hasMore(products())" (click)="next(1)">
+          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['right']" />
+          </svg>
+        </button>
+      </nav>
+      }
+        </div>
         @if(tab()==='ventas'){
         <aside class="cart" aria-label="Venta actual">
           <div class="carthead">
@@ -292,7 +331,11 @@
             <div class="inline">
               <label
                 >Buscar cliente<input
+                  type="search"
+                  autocomplete="off"
                   [(ngModel)]="customerSearch"
+                  (ngModelChange)="searchSoon('clientesVenta')"
+                  (keydown.enter)="findCustomers()"
                   placeholder="Nombre o teléfono" /></label
               ><button
                   class="iconbtn"
@@ -305,6 +348,13 @@
                   </svg>
                 </button>
             </div>
+            @if(customerMatches()!==null){<p
+              class="hint"
+              [class.warn]="customerMatches()===0"
+              role="status"
+            >
+              {{customerMatches()===0?'Ningún cliente coincide.':customerMatches()===1?'Cliente encontrado y seleccionado.':customerMatches()+' clientes encontrados: elige uno.'}}
+            </p>}
             <label
               >Cliente<select aria-label="Cliente" [(ngModel)]="customerId">
                 <option [ngValue]="null">Venta sin cliente</option>
@@ -350,7 +400,7 @@
         }
       </div>
       @if(tab()==='inventario'&&isManager()){
-      <section class="panel">
+      <section class="panel" id="product-form">
         <h2>{{product['id']?'Editar producto':'Agregar producto'}}</h2>
         <form class="fields" (ngSubmit)="saveProduct()">
           <label
@@ -438,20 +488,32 @@
         </div>
       </section>
       } } @if(tab()==='clientes'){
-      <form class="searchbar" (ngSubmit)="offset=0;run(load.bind(this))">
+      <form class="searchbar" role="search" (ngSubmit)="searchNow()">
         <div class="field">
           <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
             <path [attr.d]="icons['search']" /></svg
           ><input
+            type="search"
             name="busquedaCliente"
             aria-label="Buscar cliente"
+            autocomplete="off"
             [(ngModel)]="customerSearch"
+            (ngModelChange)="searchSoon()"
             placeholder="Nombre o teléfono"
-          />
+          />@if(customerSearch){<button
+            type="button"
+            class="clear"
+            aria-label="Borrar búsqueda"
+            (click)="clearSearch('customerSearch')"
+          >
+            <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+              <path [attr.d]="icons['x']" />
+            </svg></button
+          >}
         </div>
         <button [disabled]="busy()">Buscar</button>
       </form>
-      <section class="panel">
+      <section class="panel" id="customer-form">
         <h2>{{customer['id']?'Editar cliente':'Agregar cliente'}}</h2>
         <form class="fields" (ngSubmit)="saveCustomer()">
           <label
@@ -540,7 +602,7 @@
                 <div class="rowactions">
                   @if(isManager()){<button
                     class="subtle"
-                    (click)="customer={...c}"
+                    (click)="editCustomer(c)"
                   >
                     Editar</button
                   >}<button
@@ -557,12 +619,32 @@
             </tr>
             } @empty {
             <tr class="emptyrow">
-              <td colspan="5">Todavía no hay clientes en esta página.</td>
+              <td colspan="5">
+                {{searched()?'Ningún cliente coincide con «'+searched()+'».':'Todavía no hay clientes en esta página.'}}
+              </td>
             </tr>
             }
           </tbody>
         </table>
       </section>
+      @if(offset>0||hasMore(customers())){
+      <nav class="pagination" aria-label="Páginas">
+        <button
+          class="subtle"
+          [disabled]="busy()||offset===0"
+          (click)="next(-1)"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['left']" /></svg
+          >Anterior</button
+        ><span>Página {{offset/pageSize+1}}</span
+        ><button class="subtle" [disabled]="busy()||!hasMore(customers())" (click)="next(1)">
+          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['right']" />
+          </svg>
+        </button>
+      </nav>
+      }
       } @if(tab()==='fiao'){
       <section class="panel tablepanel">
         <table>
@@ -637,6 +719,24 @@
           </tbody>
         </table>
       </section>
+      @if(offset>0||hasMore(debts())){
+      <nav class="pagination" aria-label="Páginas">
+        <button
+          class="subtle"
+          [disabled]="busy()||offset===0"
+          (click)="next(-1)"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['left']" /></svg
+          >Anterior</button
+        ><span>Página {{offset/pageSize+1}}</span
+        ><button class="subtle" [disabled]="busy()||!hasMore(debts())" (click)="next(1)">
+          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['right']" />
+          </svg>
+        </button>
+      </nav>
+      }
       <section class="panel">
         <h2>Historial de abonos</h2>
         <ul class="ledger">
@@ -652,6 +752,24 @@
           <li class="empty">No hay abonos en esta página.</li>
           }
         </ul>
+        @if(paymentsOffset>0||hasMore(payments())){
+      <nav class="pagination" aria-label="Páginas">
+        <button
+          class="subtle"
+          [disabled]="busy()||paymentsOffset===0"
+          (click)="nextPayments(-1)"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['left']" /></svg
+          >Anterior</button
+        ><span>Página {{paymentsOffset/pageSize+1}}</span
+        ><button class="subtle" [disabled]="busy()||!hasMore(payments())" (click)="nextPayments(1)">
+          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['right']" />
+          </svg>
+        </button>
+      </nav>
+      }
       </section>
       } @if(tab()==='historial'){
       <section class="panel tablepanel">
@@ -694,6 +812,24 @@
           </tbody>
         </table>
       </section>
+      @if(offset>0||hasMore(sales())){
+      <nav class="pagination" aria-label="Páginas">
+        <button
+          class="subtle"
+          [disabled]="busy()||offset===0"
+          (click)="next(-1)"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['left']" /></svg
+          >Anterior</button
+        ><span>Página {{offset/pageSize+1}}</span
+        ><button class="subtle" [disabled]="busy()||!hasMore(sales())" (click)="next(1)">
+          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['right']" />
+          </svg>
+        </button>
+      </nav>
+      }
       } @if(tab()==='reportes'){
       <form class="searchbar dates" (ngSubmit)="run(load.bind(this))">
         <label
@@ -809,23 +945,6 @@
           }
         </ul>
       </section>
-      } @if(!['reportes','equipo'].includes(tab())){
-      <div class="pagination">
-        <button
-          class="subtle"
-          [disabled]="busy()||offset===0"
-          (click)="next(-1)"
-        >
-          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-            <path [attr.d]="icons['left']" /></svg
-          >Anterior</button
-        ><span>Página {{offset/pageSize+1}}</span
-        ><button class="subtle" [disabled]="busy()" (click)="next(1)">
-          Siguiente<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
-            <path [attr.d]="icons['right']" />
-          </svg>
-        </button>
-      </div>
       }
     </main>
   </div>
