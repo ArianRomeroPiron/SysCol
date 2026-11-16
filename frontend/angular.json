@@ -25,13 +25,33 @@
                   "maximumError": "1MB"
                 }
               ]
+            },
+            "demo": {
+              "outputHashing": "all",
+              "outputPath": "dist/syscol-demo",
+              "fileReplacements": [
+                {
+                  "replace": "src/app/transport.ts",
+                  "with": "src/app/transport.demo.ts"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "700kB",
+                  "maximumError": "1MB"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "buildTarget": "syscol:build" }
+          "options": { "buildTarget": "syscol:build" },
+          "configurations": {
+            "demo": { "buildTarget": "syscol:build:demo" }
+          }
         }
       }
     }

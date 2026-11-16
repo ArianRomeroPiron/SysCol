@@ -1,6 +1,13 @@
 import { Component, OnDestroy, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
+import {
+  DEMO,
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  resetDemo,
+  send,
+} from "./transport";
 
 type Row = Record<string, any>;
 @Component({
@@ -16,6 +23,8 @@ export class App implements OnDestroy {
   error = signal("");
   notice = signal("");
   registering = false;
+  /** Versión de prueba: la API y los datos viven en este navegador. */
+  readonly demo = DEMO;
   credentials = { nombre: "", colmado: "", email: "", password: "" };
   products = signal<Row[]>([]);
   categories = signal<Row[]>([]);
@@ -226,7 +235,7 @@ export class App implements OnDestroy {
     const headers: Record<string, string> = {};
     if (this.token) headers["Authorization"] = "Bearer " + this.token;
     if (data !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch("/api" + path, {
+    const response = await send("/api" + path, {
       method,
       headers,
       body: data === undefined ? undefined : JSON.stringify(data),
@@ -266,7 +275,7 @@ export class App implements OnDestroy {
         username: this.credentials.email,
         password: this.credentials.password,
       });
-      const response = await fetch("/api/auth/login", { method: "POST", body });
+      const response = await send("/api/auth/login", { method: "POST", body });
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.detail || "No se pudo iniciar sesión");
@@ -276,6 +285,23 @@ export class App implements OnDestroy {
       await this.load();
       this.startAutoRefresh();
     });
+  }
+  async useDemoAccount() {
+    this.registering = false;
+    this.credentials.email = DEMO_EMAIL;
+    this.credentials.password = DEMO_PASSWORD;
+    await this.login();
+  }
+  restartDemo() {
+    if (
+      !confirm(
+        "¿Borrar todo lo que registraste y volver a los datos de ejemplo?",
+      )
+    )
+      return;
+    resetDemo();
+    this.logout();
+    this.notice.set("La demo volvió a los datos de ejemplo.");
   }
   logout() {
     this.stopAutoRefresh();

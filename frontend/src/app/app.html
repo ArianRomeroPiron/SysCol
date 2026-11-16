@@ -57,6 +57,27 @@
         {{registering?'Crea la cuenta del dueño para comenzar.':'Ingresa para
         llevar tu negocio al día.'}}
       </p>
+      @if(demo){
+      <div class="demobox">
+        <strong>Versión de prueba</strong>
+        <p>
+          Entra al colmado de ejemplo con productos, clientes y fiao ya
+          cargados. Lo que registres se guarda solo en este navegador.
+        </p>
+        <button
+          type="button"
+          class="primary big"
+          [disabled]="busy()"
+          (click)="useDemoAccount()"
+        >
+          Entrar al colmado de ejemplo
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+            <path [attr.d]="icons['arrow']" />
+          </svg>
+        </button>
+      </div>
+      <p class="divider"><span>o usa tu propia cuenta de prueba</span></p>
+      }
       <form (ngSubmit)="login()">
         @if(registering){<label
           >Tu nombre<input
@@ -90,7 +111,10 @@
             maxlength="128"
             [autocomplete]="registering?'new-password':'current-password'"
         /></label>
-        @if(registering){<small>Usa al menos 12 caracteres.</small>}
+        @if(registering){<small
+          >Usa al menos 12 caracteres.{{demo?' Es una demo: no uses una
+          contraseña real.':''}}</small
+        >}
         <button class="primary big" [disabled]="busy()">
           {{busy()?'Un momento…':registering?'Crear mi colmado':'Entrar a mi
           colmado'}}
@@ -145,6 +169,19 @@
             <path [attr.d]="icons['store']" /></svg></span
         >SysCol</a
       >
+      @if(demo){
+      <span class="demochip">Demo</span>
+      <button
+        class="ghost restart"
+        [disabled]="busy()"
+        (click)="restartDemo()"
+        title="Borra lo registrado y vuelve a los datos de ejemplo"
+      >
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+          <path [attr.d]="icons['historial']" /></svg
+        ><span>Reiniciar demo</span>
+      </button>
+      }
       <div class="who">
         <span class="avatar" aria-hidden="true"
           >{{initial(user()!['nombre'])}}</span

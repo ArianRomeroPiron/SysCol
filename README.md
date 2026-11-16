@@ -16,6 +16,15 @@ Gestión de inventario, ventas y fiao para colmados dominicanos, con interfaz ad
 
 **Los recibos son comprobantes internos, no facturas fiscales.** Registrar tarjeta o transferencia no procesa el pago ni confirma que el banco lo recibió. Los precios de venta son finales: no se añade automáticamente un 18 % uniforme a todos los productos.
 
+## Versión de prueba en línea
+
+Para que otras personas prueben SysCol sin instalar nada existe un **modo demo**: la API y los datos viven en el navegador de cada visitante (`localStorage`), con un colmado de ejemplo ya cargado (productos, clientes, ventas y fiao). Cada persona ve solo sus propios datos y puede volver al inicio con **Reiniciar demo**. No hay servidor ni base de datos, así que no sirve para un negocio real.
+
+- Probar en local: `cd frontend && npx ng serve --configuration demo`.
+- Publicar en GitHub Pages: en el repositorio, **Settings → Pages → Source: GitHub Actions**. El flujo [`.github/workflows/pages.yml`](.github/workflows/pages.yml) publica la demo en cada push a `main` que toque `frontend/` (o manualmente desde **Actions → Demo en GitHub Pages → Run workflow**). Queda en `https://<usuario>.github.io/SysCol/`.
+
+El build normal (`npm run build`) no incluye el modo demo.
+
 ## Instalación local
 
 Requisitos: Docker Engine con Compose. Para desarrollar sin Docker: Python 3.13, Node 24 y PostgreSQL 16 o posterior.

@@ -362,6 +362,52 @@ p {
   margin-top: 6px;
 }
 
+/* Demo */
+.demobox {
+  display: grid;
+  gap: 8px;
+  padding: 18px;
+  margin-bottom: 20px;
+  border-radius: var(--r-card);
+  background: var(--action-soft);
+}
+.demobox strong {
+  color: var(--action-soft-ink);
+}
+.demobox p {
+  margin: 0 0 6px;
+  color: #6e3a1c;
+  font-size: 0.93rem;
+}
+.login .demobox p {
+  margin: 0 0 6px;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  margin: 0 0 18px !important;
+}
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-2);
+}
+.demochip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--action-soft);
+  color: var(--action-soft-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.restart {
+  font-size: 0.88rem;
+}
+
 /* Estructura de la app */
 .shell {
   display: grid;
@@ -1425,7 +1471,8 @@ tr.settled td {
     border-radius: 9px;
   }
   .greeting small,
-  .ghost span {
+  .ghost span,
+  .greeting {
     display: none;
   }
   .greeting {
