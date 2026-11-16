@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import uuid4
 
 
@@ -181,3 +182,99 @@ def test_search_ignores_case_accents_and_wildcards(api):
     found = api.get("/clientes", params={"q": "jose nunez"}, headers=h).json()
     assert [c["nombre"] for c in found] == ["José Núñez"]
     assert len(api.get("/clientes", params={"q": "555000"}, headers=h).json()) == 1
+
+
+def test_itbis_fiscal_data_summary_and_export(api):
+    from datetime import date
+
+    h = account(api)
+    cat = api.post("/categorias", headers=h, json={"nombre": "Víveres"}).json()
+
+    def product(name, price, rate):
+        r = api.post(
+            "/productos",
+            headers=h,
+            json={
+                "nombre": name,
+                "id_categoria": cat["id"],
+                "precio_compra": "1",
+                "precio_venta": price,
+                "tasa_itbis": rate,
+            },
+        )
+        assert r.status_code == 201, r.text
+        pid = r.json()["id"]
+        api.post(f"/productos/{pid}/stock", headers=h, json={"cantidad": 50, "motivo": "Compra"})
+        return pid
+
+    soda = product("Refresco", "118.00", 18)
+    rice = product("Arroz", "50.00", 0)
+    assert api.post(
+        "/productos",
+        headers=h,
+        json={"nombre": "X", "id_categoria": cat["id"], "precio_compra": "1", "precio_venta": "1", "tasa_itbis": 12},
+    ).status_code == 422
+
+    # Datos fiscales del cliente: acepta guiones, rechaza longitudes inválidas.
+    bad = {"nombre": "Ferretería", "telefono": "+18095550000", "rnc": "1234"}
+    assert api.post("/clientes", headers=h, json=bad).status_code == 422
+    client = api.post(
+        "/clientes",
+        headers=h,
+        json={"nombre": "Ferretería", "telefono": "+18095550000", "rnc": "1-01-23456-7", "razon_social": "Ferretería SRL"},
+    ).json()
+    assert client["rnc"] == "101234567"
+
+    sale = api.post(
+        "/ventas",
+        headers=h,
+        json={
+            "referencia": str(uuid4()),
+            "metodo_pago": "efectivo",
+            "id_cliente": client["id"],
+            "detalles": [{"id_producto": soda, "cantidad": 2}, {"id_producto": rice, "cantidad": 1}],
+        },
+    ).json()
+    assert Decimal(sale["total"]) == Decimal("286.00")
+    assert Decimal(sale["impuesto"]) == Decimal("36.00")  # 236 * 18/118
+    assert Decimal(sale["subtotal"]) == Decimal("250.00")
+    lines = {d["nombre"]: d for d in sale["detalles"]}
+    assert (lines["Refresco"]["tasa_itbis"], Decimal(lines["Refresco"]["itbis"])) == (18, Decimal("36.00"))
+    assert (lines["Arroz"]["tasa_itbis"], Decimal(lines["Arroz"]["itbis"])) == (0, Decimal("0.00"))
+
+    today = date.today().isoformat()
+    report = api.get(f"/reportes?desde={today}&hasta={today}", headers=h)
+    if report.json()["ventas"]:  # el día dominicano puede diferir del día UTC del servidor
+        assert Decimal(report.json()["itbis"]) == Decimal("36.00")
+
+    # Datos fiscales del colmado y pasos de incorporación.
+    assert api.get("/colmado", headers=h).json()["pasos_fe"] == []
+    assert api.put("/colmado", headers=h, json={"rnc": "12345"}).status_code == 422
+    store = api.put(
+        "/colmado",
+        headers=h,
+        json={"rnc": "401-00000-1", "razon_social": "La Esquina SRL", "pasos_fe": ["certificado", "rnc"]},
+    ).json()
+    assert store["rnc"] == "401000001"
+    assert store["pasos_fe"] == ["rnc", "certificado"]
+
+    summary = api.get("/fiscal/resumen", headers=h).json()
+    assert summary["ventas_30_dias"] == 1
+    assert summary["recomendacion"] == "facturador_gratuito"
+    assert summary["ventas_con_rnc_30_dias"] == 1
+    assert Decimal(str(summary["mes"]["itbis"])) == Decimal("36.00")
+
+    export = api.get(f"/ventas/exportar?desde=2026-01-01&hasta={date.today().isoformat()}", headers=h)
+    assert export.status_code == 200
+    assert export.headers["content-type"].startswith("text/csv")
+    rows = export.text.lstrip("\ufeff").splitlines()
+    assert rows[0].startswith("venta,fecha,hora,metodo_pago")
+    assert len(rows) == 3
+    assert "101234567" in rows[1] and "Ferretería SRL" in rows[1]
+
+    cashier = {"nombre": "Caja", "email": "caja@example.com", "password": "correct-horse-123", "rol": "cajero"}
+    api.post("/auth/usuarios", headers=h, json=cashier)
+    token = api.post("/auth/login", data={"username": "caja@example.com", "password": "correct-horse-123"}).json()
+    ch = {"Authorization": "Bearer " + token["access_token"]}
+    assert api.get("/ventas/exportar?desde=2026-01-01&hasta=2026-01-02", headers=ch).status_code == 403
+    assert api.put("/colmado", headers=ch, json={}).status_code == 403

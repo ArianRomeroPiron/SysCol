@@ -19,6 +19,11 @@ class Colmado(Base):
     __tablename__ = "colmados"
     id = Column(Integer, primary_key=True)
     nombre = Column(String(120), nullable=False)
+    # Datos fiscales para la facturación electrónica (e-CF).
+    rnc = Column(String(11), nullable=True)
+    razon_social = Column(String(160), nullable=True)
+    direccion = Column(String(200), nullable=True)
+    pasos_fe = Column(String(400), nullable=False, server_default="", default="")
 
 
 class Categoria(Base):
@@ -45,6 +50,8 @@ class Producto(Base):
     stock = Column(Integer, nullable=False, default=0)
     stock_minimo = Column(Integer, nullable=False, default=5)
     activo = Column(Boolean, nullable=False, default=True)
+    # ITBIS incluido en el precio final: 18, 16 o 0 (exento).
+    tasa_itbis = Column(Integer, nullable=False, server_default="18", default=18)
 
 
 class Movimiento(Base):
@@ -67,6 +74,9 @@ class Cliente(Base):
     limite_credito = Column(Numeric(14, 2), nullable=False, default=0)
     saldo = Column(Numeric(14, 2), nullable=False, default=0)
     consentimiento_whatsapp = Column(Boolean, nullable=False, default=False)
+    # RNC (9 dígitos) o cédula (11) para facturas con crédito fiscal.
+    rnc = Column(String(11), nullable=True)
+    razon_social = Column(String(160), nullable=True)
     __table_args__ = (CheckConstraint("saldo >= 0 AND limite_credito >= 0"),)
 
 
@@ -95,6 +105,9 @@ class DetalleVenta(Base):
     cantidad = Column(Integer, nullable=False)
     precio_venta = Column(Numeric(14, 2), nullable=False)
     subtotal = Column(Numeric(14, 2), nullable=False)
+    # Nulos en ventas anteriores al registro del ITBIS.
+    tasa_itbis = Column(Integer, nullable=True)
+    itbis = Column(Numeric(14, 2), nullable=True)
 
 
 class Deuda(Base):

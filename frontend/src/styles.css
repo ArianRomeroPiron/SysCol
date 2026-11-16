@@ -1100,7 +1100,7 @@ tr.settled td {
 /* Reportes */
 .summary {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
   padding: 0;
 }
 .figure {
@@ -1172,6 +1172,201 @@ tr.settled td {
 }
 .rankamt {
   text-align: right;
+}
+
+/* Facturación electrónica */
+.taxid {
+  display: block;
+  margin: 2px 0 0 40px;
+  font-variant-numeric: tabular-nums;
+}
+.verdict {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  border-color: #cfe3d4;
+  background: linear-gradient(var(--ok-soft), var(--ok-soft)) top / 100% 6px no-repeat,
+    var(--card);
+}
+.verdict.needsprovider {
+  border-color: #f0d9a8;
+  background: linear-gradient(var(--warn-soft), var(--warn-soft)) top / 100% 6px no-repeat,
+    var(--card);
+}
+.verdictnum {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  min-width: 140px;
+  padding: 10px 18px;
+  border-radius: 16px;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.needsprovider .verdictnum {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.verdictnum strong {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.verdictnum span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  max-width: 14ch;
+}
+.verdicttext h2 {
+  margin: 0 0 4px;
+}
+.verdicttext p {
+  margin: 0 0 14px;
+  max-width: 68ch;
+}
+.usage {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ground-2);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.usage > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ok);
+}
+.needsprovider .usage > span {
+  background: var(--warn);
+}
+.fiscalgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.panelhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.panelhead h2 {
+  margin: 0;
+}
+.steps {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  counter-reset: paso;
+}
+.steps li {
+  counter-increment: paso;
+  border-top: 1px solid var(--line);
+}
+.steps li:first-child {
+  border-top: 0;
+}
+.stepcheck {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  cursor: pointer;
+  font-weight: 400;
+}
+.stepcheck input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.stepcheck strong {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.stepcheck strong::before {
+  content: counter(paso) ". ";
+  color: var(--ink-2);
+}
+.stepcheck small {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+.steps li.done strong {
+  color: var(--ok);
+}
+.steps li.done strong::before {
+  color: var(--ok);
+}
+.extlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--action);
+  font-weight: 600;
+  text-underline-offset: 4px;
+}
+.stack {
+  display: grid;
+  gap: 16px;
+}
+.panelnote {
+  margin: -8px 0 16px;
+  max-width: 62ch;
+}
+.taxtable {
+  margin-bottom: 12px;
+}
+.taxtable th,
+.taxtable td {
+  padding: 10px 0;
+}
+.taxtable th + th,
+.taxtable td + td {
+  padding-left: 16px;
+}
+.taxtable tfoot td {
+  font-weight: 700;
+  border-top: 1.5px solid var(--line-2);
+}
+.fiscalgrid .searchbar.dates {
+  flex-wrap: wrap;
+  margin: 0;
+}
+.fiscalgrid .searchbar.dates label {
+  flex: 1 1 140px;
+  max-width: none;
+}
+.fiscalgrid .searchbar.dates button {
+  flex: 1 1 100%;
+  white-space: nowrap;
+}
+.panelnote {
+  font-size: 0.92rem;
+}
+.fiscalnote {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  max-width: 70ch;
+}
+.slipstore {
+  font-weight: 600;
+  color: var(--ink) !important;
+}
+.sliptax {
+  padding: 8px 0;
+  border-top: 1.5px dashed var(--line-2);
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+.sliptax li {
+  padding: 3px 0;
 }
 
 /* Paginación */
@@ -1376,7 +1571,10 @@ tr.settled td {
     display: none;
   }
   .summary {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .fiscalgrid {
+    grid-template-columns: 1fr;
   }
   .figure.lead {
     grid-column: 1 / -1;
@@ -1536,6 +1734,28 @@ tr.settled td {
   }
   .figure.lead {
     border-bottom: 0;
+  }
+  .verdict {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .verdictnum {
+    justify-self: start;
+  }
+  .taxtable tfoot {
+    display: block;
+  }
+  .taxtable tfoot tr {
+    display: flex;
+    justify-content: space-between;
+  }
+  .taxtable th + th,
+  .taxtable td + td {
+    padding-left: 0;
+  }
+  .taxid {
+    margin: 0;
+    text-align: right;
   }
   .ranking li {
     grid-template-columns: 22px minmax(0, 1fr) auto;

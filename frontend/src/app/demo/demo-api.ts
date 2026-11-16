@@ -19,7 +19,24 @@ interface Db {
   abonos: Row[];
 }
 
-const KEY = "syscol-demo-v1";
+const KEY = "syscol-demo-v2";
+const DR_OFFSET = "-04:00";
+const LIMITE_FACTURADOR_GRATUITO = 150;
+const PASOS_FE = ["rnc", "oficina_virtual", "solicitud", "certificado", "modalidad", "pruebas"];
+
+/** ITBIS contenido en un monto (en centavos) que ya lo incluye. */
+function includedTax(totalCents: number, rate: number) {
+  return rate ? Math.round((totalCents * rate) / (100 + rate)) : 0;
+}
+
+/** RNC (9) o cédula (11); acepta guiones y espacios. */
+function taxId(value: any) {
+  const digits = String(value ?? "").replace(/[-\s]/g, "");
+  if (!digits) return null;
+  if (!/^\d+$/.test(digits) || ![9, 11].includes(digits.length))
+    fail(422, "Escribe un RNC de 9 dígitos o una cédula de 11");
+  return digits;
+}
 export const DEMO_EMAIL = "demo@syscol.app";
 export const DEMO_PASSWORD = "colmado-de-prueba";
 
@@ -149,6 +166,8 @@ function validProduct(data: Row) {
   if (!Number.isInteger(minimo) || minimo < 0)
     fail(422, "La alerta de stock debe ser un número entero.");
   const codigo = data["codigo_barras"] ? String(data["codigo_barras"]).trim() : null;
+  const tasa = Number(data["tasa_itbis"] ?? 18);
+  if (![0, 16, 18].includes(tasa)) fail(422, "La tasa de ITBIS debe ser 18 %, 16 % o exento.");
   return {
     nombre,
     id_categoria: Number(data["id_categoria"]),
@@ -157,6 +176,7 @@ function validProduct(data: Row) {
     precio_venta: money(cents(data["precio_venta"])),
     stock_minimo: minimo,
     activo: data["activo"] !== false,
+    tasa_itbis: tasa,
   };
 }
 
@@ -173,6 +193,8 @@ function validCustomer(data: Row) {
     telefono,
     limite_credito: money(cents(limite)),
     consentimiento_whatsapp: !!data["consentimiento_whatsapp"],
+    rnc: taxId(data["rnc"]),
+    razon_social: String(data["razon_social"] ?? "").trim() || null,
   };
 }
 
@@ -197,6 +219,7 @@ function registerSale(db: Db, user: Row, data: Row, fecha = new Date().toISOStri
 
   // Validar todo antes de modificar nada (como una transacción).
   let total = 0;
+  let tax = 0;
   const detalles = items.map((item) => {
     const p = owned(db, "productos", item["id_producto"], user);
     const cantidad = Number(item["cantidad"]);
@@ -204,8 +227,11 @@ function registerSale(db: Db, user: Row, data: Row, fecha = new Date().toISOStri
     if (!p["activo"]) fail(409, "Producto inactivo");
     if (p["stock"] < cantidad) fail(409, "Stock insuficiente: " + p["nombre"]);
     const subtotal = cents(p["precio_venta"]) * cantidad;
+    const tasa = Number(p["tasa_itbis"] ?? 18);
+    const itbis = includedTax(subtotal, tasa);
     total += subtotal;
-    return { p, cantidad, subtotal };
+    tax += itbis;
+    return { p, cantidad, subtotal, tasa, itbis };
   });
   if (metodo === "fiao" && cents(client!["saldo"]) + total > cents(client!["limite_credito"]))
     fail(409, "La venta supera el límite de crédito");
@@ -219,8 +245,8 @@ function registerSale(db: Db, user: Row, data: Row, fecha = new Date().toISOStri
     referencia: ref,
     fecha,
     metodo_pago: metodo,
-    subtotal: money(total),
-    impuesto: 0,
+    subtotal: money(total - tax),
+    impuesto: money(tax),
     total: money(total),
     detalles: detalles.map((d) => ({
       id: nextId(db),
@@ -229,6 +255,8 @@ function registerSale(db: Db, user: Row, data: Row, fecha = new Date().toISOStri
       cantidad: d.cantidad,
       precio_venta: d.p["precio_venta"],
       subtotal: money(d.subtotal),
+      tasa_itbis: d.tasa,
+      itbis: money(d.itbis),
     })),
   };
   db.ventas.push(venta);
@@ -439,7 +467,7 @@ async function route(
     if (method === "GET") return [200, pageOf(mine(db.ventas).sort(byIdDesc), params)];
     if (method === "POST") return [201, registerSale(db, user!, body ?? {})];
   }
-  if (seg[0] === "ventas" && seg[1] && method === "GET")
+  if (seg[0] === "ventas" && seg[1] && seg[1] !== "exportar" && method === "GET")
     return [200, owned(db, "ventas", Number(seg[1]), user!)];
   if (path === "/deudas" && method === "GET")
     return [200, pageOf(mine(db.deudas).sort(byIdDesc), params)];
@@ -473,6 +501,7 @@ async function route(
       {
         ventas: ventas.length,
         total: money(ventas.reduce((s, v) => s + cents(v["total"]), 0)),
+        itbis: money(ventas.reduce((s, v) => s + cents(v["impuesto"] || 0), 0)),
         deuda_pendiente: money(mine(db.clientes).reduce((s, c) => s + cents(c["saldo"]), 0)),
         productos: [...top.values()]
           .sort((a, b) => b.cantidad - a.cantidad)
@@ -480,6 +509,113 @@ async function route(
           .map((r) => ({ ...r, total: money(r.total) })),
       },
     ];
+  }
+
+  // Facturación electrónica
+  if (path === "/colmado") {
+    const store = db.colmados.find((c) => c["id"] === user!["colmado_id"])!;
+    if (method === "PUT") {
+      manager(user!);
+      const pasos: string[] = Array.isArray(body?.pasos_fe) ? body.pasos_fe : [];
+      if (pasos.some((x) => !PASOS_FE.includes(x))) fail(422, "Paso no válido.");
+      store["rnc"] = taxId(body?.rnc);
+      store["razon_social"] = String(body?.razon_social ?? "").trim() || null;
+      store["direccion"] = String(body?.direccion ?? "").trim() || null;
+      store["pasos_fe"] = PASOS_FE.filter((x) => pasos.includes(x));
+    }
+    if (method === "GET" || method === "PUT")
+      return [
+        200,
+        {
+          id: store["id"],
+          nombre: store["nombre"],
+          rnc: store["rnc"] ?? null,
+          razon_social: store["razon_social"] ?? null,
+          direccion: store["direccion"] ?? null,
+          pasos_fe: store["pasos_fe"] ?? [],
+        },
+      ];
+  }
+  if (path === "/fiscal/resumen" && method === "GET") {
+    manager(user!);
+    const today = drDate(new Date().toISOString());
+    const since = drDate(new Date(Date.parse(today + "T12:00:00" + DR_OFFSET) - 29 * 86400000).toISOString());
+    const month = today.slice(0, 8) + "01";
+    const ventas = mine(db.ventas);
+    const last30 = ventas.filter((v) => drDate(v["fecha"]) >= since);
+    const byRate = new Map<number, { total: number; itbis: number }>();
+    for (const v of ventas.filter((v) => drDate(v["fecha"]) >= month))
+      for (const d of v["detalles"]) {
+        const rate = d.tasa_itbis ?? 18;
+        const row = byRate.get(rate) ?? { total: 0, itbis: 0 };
+        row.total += cents(d.subtotal);
+        row.itbis += cents(d.itbis ?? 0);
+        byRate.set(rate, row);
+      }
+    const rows = [...byRate.entries()].sort((a, b) => b[0] - a[0]);
+    const withRnc = last30.filter((v) => {
+      const c = db.clientes.find((c) => c["id"] === v["id_cliente"]);
+      return !!c?.["rnc"];
+    }).length;
+    return [
+      200,
+      {
+        ventas_30_dias: last30.length,
+        limite_facturador_gratuito: LIMITE_FACTURADOR_GRATUITO,
+        recomendacion: last30.length <= LIMITE_FACTURADOR_GRATUITO ? "facturador_gratuito" : "proveedor",
+        ventas_con_rnc_30_dias: withRnc,
+        mes: {
+          desde: month,
+          por_tasa: rows.map(([tasa, r]) => ({
+            tasa,
+            total: money(r.total),
+            base: money(r.total - r.itbis),
+            itbis: money(r.itbis),
+          })),
+          itbis: money(rows.reduce((s, [, r]) => s + r.itbis, 0)),
+        },
+      },
+    ];
+  }
+  if (path === "/ventas/exportar" && method === "GET") {
+    manager(user!);
+    const desde = params.get("desde") || "";
+    const hasta = params.get("hasta") || "";
+    if (!desde || !hasta || hasta < desde) fail(422, "Selecciona un período válido");
+    const cell = (v: any) => {
+      const t = String(v ?? "");
+      return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    const lines = [
+      "venta,fecha,hora,metodo_pago,cliente,rnc_cedula_cliente,razon_social_cliente,producto,cantidad,precio_unitario,tasa_itbis,base_imponible,itbis,total_linea",
+    ];
+    const ventas = mine(db.ventas)
+      .filter((v) => {
+        const d = drDate(v["fecha"]);
+        return d >= desde && d <= hasta;
+      })
+      .sort((a, b) => a["fecha"].localeCompare(b["fecha"]) || a["id"] - b["id"]);
+    for (const v of ventas) {
+      const c = db.clientes.find((c) => c["id"] === v["id_cliente"]);
+      const hora = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Santo_Domingo",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(v["fecha"]));
+      for (const d of v["detalles"]) {
+        const itbis = cents(d.itbis ?? 0);
+        lines.push(
+          [
+            v["id"], drDate(v["fecha"]), hora, v["metodo_pago"], c?.["nombre"] ?? "",
+            c?.["rnc"] ?? "", c?.["razon_social"] ?? "", d.nombre, d.cantidad,
+            Number(d.precio_venta).toFixed(2), d.tasa_itbis ?? "",
+            money(cents(d.subtotal) - itbis).toFixed(2), money(itbis).toFixed(2),
+            Number(d.subtotal).toFixed(2),
+          ].map(cell).join(","),
+        );
+      }
+    }
+    return [200, { __csv: "\ufeff" + lines.join("\r\n") + "\r\n" }];
   }
 
   // Recordatorio por WhatsApp
@@ -519,6 +655,11 @@ export async function demoFetch(input: string, init: RequestInit = {}): Promise<
     const [status, data] = await route(draft, method, path, url.searchParams, body, token);
     if (method !== "GET") save(draft);
     await new Promise((r) => setTimeout(r, 120)); // un poco de latencia realista
+    if (data && typeof data === "object" && "__csv" in data)
+      return new Response(data.__csv, {
+        status,
+        headers: { "Content-Type": "text/csv; charset=utf-8" },
+      });
     return json(status, structuredClone(data));
   } catch (e) {
     if (e instanceof ApiError) return json(e.status, { detail: e.message });
@@ -547,7 +688,14 @@ async function seed(): Promise<Db> {
     deudas: [],
     abonos: [],
   };
-  const store = { id: nextId(db), nombre: "Colmado La Esquina" };
+  const store: Row = {
+    id: nextId(db),
+    nombre: "Colmado La Esquina",
+    rnc: null,
+    razon_social: null,
+    direccion: "Calle Duarte #12, Villa Mella",
+    pasos_fe: ["rnc", "oficina_virtual"],
+  };
   db.colmados.push(store);
   const owner = {
     id: nextId(db),
@@ -575,6 +723,11 @@ async function seed(): Promise<Db> {
     db.categorias.push({ id, colmado_id: store.id, nombre });
   }
 
+  // Víveres básicos exentos de ITBIS en la demo; el resto con la tasa general.
+  const exentos = new Set([
+    "Arroz selecto 5 lb", "Habichuelas rojas 1 lb", "Azúcar crema 2 lb", "Café molido 1 lb",
+    "Espaguetis 1 lb", "Leche evaporada", "Huevos (unidad)", "Queso de freír 1 lb",
+  ]);
   const productos: [string, string, string | null, number, number, number, number][] = [
     ["Arroz selecto 5 lb", "Víveres", "7460101000011", 230, 285, 60, 10],
     ["Habichuelas rojas 1 lb", "Víveres", "7460101000028", 70, 95, 30, 8],
@@ -609,17 +762,21 @@ async function seed(): Promise<Db> {
       stock,
       stock_minimo: minimo,
       activo: true,
+      tasa_itbis: exentos.has(nombre) ? 0 : 18,
     });
 
   const clientes: [string, string, number, boolean][] = [
     ["Doña Marta Rodríguez", "+18095551234", 3000, true],
     ["Juan Pérez", "+18295550198", 1500, true],
     ["Carmen Báez", "+18495557711", 2000, false],
+    ["Ferretería El Progreso", "+18095558800", 5000, false],
     ["José Núñez", "+18095553390", 1000, true],
     ["Luisa Almonte", "+18295554420", 2500, true],
   ];
   for (const [nombre, telefono, limite, wa] of clientes)
     db.clientes.push({
+      rnc: nombre.startsWith("Ferretería") ? "131000017" : null,
+      razon_social: nombre.startsWith("Ferretería") ? "Ferretería El Progreso SRL" : null,
       id: nextId(db),
       colmado_id: store.id,
       nombre,
@@ -647,6 +804,7 @@ async function seed(): Promise<Db> {
     [1, 15, "fiao", "Luisa Almonte", [["Arroz selecto 5 lb", 2], ["Aceite vegetal 32 oz", 1], ["Habichuelas rojas 1 lb", 3]]],
     [0, 8, "efectivo", null, [["Café molido 1 lb", 1], ["Leche evaporada", 2], ["Huevos (unidad)", 6]]],
     [0, 9, "tarjeta", null, [["Cerveza 12 oz", 6], ["Refresco cola 2 L", 1]]],
+    [0, 7, "transferencia", "Ferretería El Progreso", [["Agua 1 galón", 6], ["Cloro 1 galón", 2]]],
   ];
   const now = Date.now();
   const at = (daysAgo: number, hour: number) => {

@@ -246,8 +246,8 @@
               >}
             </div>
             <h3>{{p['nombre']}}</h3>
-            @if(categoryName(p['id_categoria'])){<p class="cat">
-              {{categoryName(p['id_categoria'])}}
+            @if(categoryName(p['id_categoria'])||tab()==='inventario'){<p class="cat">
+              {{categoryName(p['id_categoria'])}}{{tab()==='inventario'?(categoryName(p['id_categoria'])?' · ':'')+'ITBIS '+taxLabel(p['tasa_itbis']??18):''}}
             </p>}
             <p class="price">{{money(p['precio_venta'])}}</p>
             <p
@@ -492,6 +492,17 @@
               required
               [(ngModel)]="product['stock_minimo']"
           /></label>
+          <label
+            >ITBIS incluido en el precio<select
+              name="tasa"
+              aria-label="ITBIS incluido en el precio"
+              [(ngModel)]="product['tasa_itbis']"
+            >
+              @for(t of tasas;track t.value){
+              <option [ngValue]="t.value">{{t.label}}</option>
+              }
+            </select></label
+          >
           <label class="check"
             ><input
               name="activo"
@@ -578,6 +589,22 @@
               [(ngModel)]="customer['limite_credito']"
               required
           /></label>
+          <label
+            >RNC o cédula <small>(opcional, para crédito fiscal)</small
+            ><input
+              name="rnc"
+              inputmode="numeric"
+              maxlength="13"
+              placeholder="101234567 o 00112345678"
+              [(ngModel)]="customer['rnc']"
+          /></label>
+          <label
+            >Razón social <small>(opcional)</small
+            ><input
+              name="razon"
+              maxlength="160"
+              [(ngModel)]="customer['razon_social']"
+          /></label>
           <label class="check"
             ><input
               type="checkbox"
@@ -613,7 +640,7 @@
                   ><span class="avatar sm" aria-hidden="true"
                     >{{initial(c['nombre'])}}</span
                   >{{c['nombre']}}</span
-                >
+                >@if(c['rnc']){<small class="taxid">RNC {{c['rnc']}}</small>}
               </td>
               <td data-label="Teléfono" class="muted">{{c['telefono']}}</td>
               <td data-label="Límite" class="num">
@@ -881,7 +908,15 @@
             type="date"
             [(ngModel)]="to"
             required /></label
-        ><button [disabled]="busy()">Ver reporte</button>
+        ><button [disabled]="busy()">Ver reporte</button
+        ><button
+          type="button"
+          class="ghost"
+          [disabled]="busy()"
+          (click)="exportFrom=from;exportTo=to;exportSales()"
+        >
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['download']" /></svg>Exportar CSV
+        </button>
       </form>
       @if(report();as r){
       <section class="panel summary" aria-label="Resumen del período">
@@ -892,6 +927,10 @@
         <div class="figure">
           <span>Ventas del período</span>
           <strong>{{r['ventas']}}</strong>
+        </div>
+        <div class="figure">
+          <span>ITBIS incluido</span>
+          <strong>{{money(r['itbis'])}}</strong>
         </div>
         <div class="figure">
           <span>Fiao pendiente actual</span>
@@ -922,7 +961,192 @@
           }
         </ol>
       </section>
-      } } @if(tab()==='equipo'){
+      } } @if(tab()==='fiscal'){
+      @if(fiscal();as f){
+      <section
+        class="panel verdict"
+        [class.needsprovider]="f['recomendacion']==='proveedor'"
+        aria-label="Cómo emitir tus e-CF"
+      >
+        <div class="verdictnum">
+          <strong>{{f['ventas_30_dias']}}</strong>
+          <span>ventas en los últimos 30 días</span>
+        </div>
+        <div class="verdicttext">
+          @if(f['recomendacion']==='facturador_gratuito'){
+          <h2>Te alcanza el Facturador Gratuito de la DGII</h2>
+          <p>
+            Cubre hasta {{f['limite_facturador_gratuito']}} facturas al mes y
+            no tiene costo. Cada venta necesita su e-CF, así que vigila este
+            número si el negocio crece.
+          </p>
+          } @else {
+          <h2>Necesitas un proveedor de facturación electrónica</h2>
+          <p>
+            Emites más de {{f['limite_facturador_gratuito']}} facturas al mes,
+            el límite del Facturador Gratuito. La DGII publica la lista de
+            proveedores autorizados; SysCol te deja exportar tus ventas para
+            pasárselas.
+          </p>
+          }
+          <div
+            class="usage"
+            role="img"
+            [attr.aria-label]="f['ventas_30_dias']+' de '+f['limite_facturador_gratuito']+' facturas'"
+          >
+            <span
+              [style.width.%]="percent(f['ventas_30_dias'],f['limite_facturador_gratuito'])"
+            ></span>
+          </div>
+          <small
+            >{{f['ventas_30_dias']}} de {{f['limite_facturador_gratuito']}}
+            facturas · {{f['ventas_con_rnc_30_dias']}} a clientes con RNC
+            (crédito fiscal)</small
+          >
+        </div>
+      </section>
+      }
+      <div class="fiscalgrid">
+        <section class="panel" aria-labelledby="pasos-title">
+          <div class="panelhead">
+            <h2 id="pasos-title">Pasos para incorporarte</h2>
+            <span class="count"
+              >{{stepsDone()}} de {{pasosFe.length}} listos</span
+            >
+          </div>
+          <ol class="steps">
+            @for(step of pasosFe;track step.id){
+            <li [class.done]="stepDone(step.id)">
+              <label class="stepcheck">
+                <input
+                  type="checkbox"
+                  [checked]="stepDone(step.id)"
+                  [disabled]="busy()"
+                  (change)="toggleStep(step.id,$any($event.target).checked)"
+                />
+                <span>
+                  <strong>{{step.title}}</strong>
+                  <small>{{step.desc}}</small>
+                </span>
+              </label>
+            </li>
+            }
+          </ol>
+          <a
+            class="extlink"
+            href="https://dgii.gov.do"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Ir al portal de la DGII<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['external']" /></svg></a
+          >
+        </section>
+        <div>
+          <section class="panel">
+            <h2>Datos fiscales del colmado</h2>
+            <form class="stack" (ngSubmit)="saveFiscal()">
+              <label
+                >RNC o cédula<input
+                  name="rncColmado"
+                  inputmode="numeric"
+                  maxlength="13"
+                  placeholder="9 u 11 dígitos"
+                  [(ngModel)]="fiscalForm['rnc']"
+                  (ngModelChange)="fiscalDirty=true"
+              /></label>
+              <label
+                >Razón social o nombre del titular<input
+                  name="razonColmado"
+                  maxlength="160"
+                  [(ngModel)]="fiscalForm['razon_social']"
+                  (ngModelChange)="fiscalDirty=true"
+              /></label>
+              <label
+                >Dirección<input
+                  name="direccionColmado"
+                  maxlength="200"
+                  [(ngModel)]="fiscalForm['direccion']"
+                  (ngModelChange)="fiscalDirty=true"
+              /></label>
+              <small
+                >Aparecen en tus recibos. Los e-CF los emite la DGII o tu
+                proveedor con estos mismos datos.</small
+              >
+              <div class="formactions">
+                <button class="primary" [disabled]="busy()">
+                  Guardar datos fiscales
+                </button>
+              </div>
+            </form>
+          </section>
+          @if(fiscal();as f){
+          <section class="panel">
+            <h2>ITBIS de este mes</h2>
+            @if(f['mes']['por_tasa'].length){
+            <table class="taxtable">
+              <thead>
+                <tr>
+                  <th>Tasa</th>
+                  <th class="num">Base</th>
+                  <th class="num">ITBIS</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for(t of f['mes']['por_tasa'];track $index){
+                <tr>
+                  <td data-label="Tasa">{{taxLabel(t.tasa)}}</td>
+                  <td data-label="Base" class="num">{{money(t.base)}}</td>
+                  <td data-label="ITBIS" class="num">{{money(t.itbis)}}</td>
+                </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td></td>
+                  <td class="num">{{money(f['mes']['itbis'])}}</td>
+                </tr>
+              </tfoot>
+            </table>
+            } @else {
+            <p class="empty">Aún no hay ventas este mes.</p>
+            }
+            <small
+              >Muchos alimentos básicos están exentos de ITBIS. Revisa la tasa
+              de cada producto en Inventario.</small
+            >
+          </section>
+          }
+          <section class="panel">
+            <h2>Exportar ventas</h2>
+            <p class="panelnote">
+              Un archivo CSV con cada producto vendido, su ITBIS y el RNC del
+              cliente, para tu proveedor de facturación o tu contador.
+            </p>
+            <form class="searchbar dates" (ngSubmit)="exportSales()">
+              <label
+                >Desde<input
+                  name="exportDesde"
+                  type="date"
+                  [(ngModel)]="exportFrom"
+                  required /></label
+              ><label
+                >Hasta<input
+                  name="exportHasta"
+                  type="date"
+                  [(ngModel)]="exportTo"
+                  required /></label
+              ><button class="primary" [disabled]="busy()">
+                <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['download']" /></svg>Descargar CSV
+              </button>
+            </form>
+          </section>
+        </div>
+      </div>
+      <p class="fiscalnote">
+        SysCol todavía no emite e-CF: sus recibos son comprobantes internos.
+        Esta sección te ayuda a organizar tus datos y pasos con la DGII.
+      </p>
+      } @if(tab()==='equipo'){
       <section class="panel">
         <h2>Agregar empleado</h2>
         <form class="fields" (ngSubmit)="saveEmployee()">
@@ -996,6 +1220,10 @@
           <path [attr.d]="icons['store']" /></svg
       ></span>
       <h2>SysCol · Recibo #{{r['id']}}</h2>
+      @if(store();as st){<p class="slipstore">
+        {{st['razon_social']||st['nombre']}}@if(st['rnc']){<br />RNC
+        {{st['rnc']}}}
+      </p>}
       <p>
         {{r['fecha']|date:'medium':'-0400'}} ·
         {{methods[r['metodo_pago']]||r['metodo_pago']}}
@@ -1009,6 +1237,17 @@
       </li>
       }
     </ul>
+    @if(+r['impuesto']>0){
+    <ul class="sliplines sliptax">
+      <li>
+        <span>Subtotal sin ITBIS</span
+        ><span>{{money(receiptTax(r).base)}}</span>
+      </li>
+      <li>
+        <span>ITBIS incluido</span><span>{{money(receiptTax(r).itbis)}}</span>
+      </li>
+    </ul>
+    }
     <div class="sliptotal">
       <span>Total</span><strong>{{money(r['total'])}}</strong>
     </div>

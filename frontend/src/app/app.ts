@@ -112,6 +112,10 @@ export class App implements OnDestroy {
     alert:
       "M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
     check: "M20 6 9 17l-5-5",
+    fiscal:
+      "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v4a2 2 0 0 0 2 2h4M9 15l2 2 4-4",
+    download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+    external: "M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
   };
 
   readonly sections: Record<string, { title: string; desc: string }> = {
@@ -139,6 +143,10 @@ export class App implements OnDestroy {
       title: "Así va tu negocio",
       desc: "Ventas, total vendido y fiao pendiente del período que elijas.",
     },
+    fiscal: {
+      title: "Facturación electrónica",
+      desc: "Prepara tu colmado para emitir comprobantes fiscales electrónicos (e-CF) ante la DGII.",
+    },
     equipo: {
       title: "Tu equipo",
       desc: "Quién trabaja contigo y qué puede hacer en SysCol.",
@@ -154,7 +162,10 @@ export class App implements OnDestroy {
       { id: "historial", label: "Historial de ventas", short: "Historial" },
     ];
     if (this.isManager())
-      items.push({ id: "reportes", label: "Reportes", short: "Reportes" });
+      items.push(
+        { id: "reportes", label: "Reportes", short: "Reportes" },
+        { id: "fiscal", label: "Facturación", short: "e-CF" },
+      );
     if (this.user()?.["rol"] === "dueno")
       items.push({ id: "equipo", label: "Mi equipo", short: "Equipo" });
     return items;
@@ -204,6 +215,7 @@ export class App implements OnDestroy {
       precio_venta: 0,
       stock_minimo: 5,
       activo: true,
+      tasa_itbis: 18,
     };
   }
   newCustomer(): Row {
@@ -212,6 +224,8 @@ export class App implements OnDestroy {
       telefono: "+1809",
       limite_credito: 0,
       consentimiento_whatsapp: false,
+      rnc: "",
+      razon_social: "",
     };
   }
   today() {
@@ -283,6 +297,7 @@ export class App implements OnDestroy {
       this.user.set(await this.api("/auth/me"));
       this.credentials.password = "";
       await this.load();
+      void this.loadStore();
       this.startAutoRefresh();
     });
   }
@@ -327,6 +342,10 @@ export class App implements OnDestroy {
     this.stockValues = {};
     this.stockReasons = {};
     this.reference = this.uuid();
+    this.store.set(null);
+    this.fiscal.set(null);
+    this.fiscalForm = this.fiscalFrom(null);
+    this.fiscalDirty = false;
     this.offset = 0;
     this.paymentsOffset = 0;
     this.search = "";
@@ -401,6 +420,13 @@ export class App implements OnDestroy {
       case "equipo":
         this.employees.set(await this.api("/auth/usuarios"));
         break;
+      case "fiscal": {
+        const store = await this.api("/colmado");
+        this.store.set(store);
+        if (!this.fiscalDirty) this.fiscalForm = this.fiscalFrom(store);
+        this.fiscal.set(await this.api("/fiscal/resumen"));
+        break;
+      }
     }
   }
   async next(delta: number) {
@@ -643,5 +669,130 @@ export class App implements OnDestroy {
   }
   print() {
     window.print();
+  }
+
+  // ---------- Facturación electrónica ----------
+  /** Datos del colmado (nombre y datos fiscales) para recibos y e-CF. */
+  store = signal<Row | null>(null);
+  fiscal = signal<Row | null>(null);
+  fiscalForm: Row = this.fiscalFrom(null);
+  /** Evita que la recarga automática pise lo que se está escribiendo. */
+  fiscalDirty = false;
+  exportFrom = this.monthStart();
+  exportTo = this.today();
+  readonly tasas = [
+    { value: 18, label: "18 % (tasa general)" },
+    { value: 16, label: "16 % (tasa reducida)" },
+    { value: 0, label: "Exento" },
+  ];
+  readonly pasosFe = [
+    {
+      id: "rnc",
+      title: "Inscribe el colmado en el RNC",
+      desc: "Necesitas estar en el Registro Nacional de Contribuyentes, como persona física o empresa.",
+    },
+    {
+      id: "oficina_virtual",
+      title: "Activa la Oficina Virtual (OFV)",
+      desc: "Con la clave de la OFV haces las solicitudes a la DGII desde dgii.gov.do.",
+    },
+    {
+      id: "modalidad",
+      title: "Elige cómo vas a emitir",
+      desc: "Facturador Gratuito de la DGII si emites hasta 150 facturas al mes; si emites más, un proveedor autorizado.",
+    },
+    {
+      id: "solicitud",
+      title: "Solicita ser emisor electrónico",
+      desc: "Haz la solicitud en la OFV o en una administración local de la DGII.",
+    },
+    {
+      id: "certificado",
+      title: "Obtén el certificado digital",
+      desc: "Lo exige la DGII para firmar los e-CF; tu proveedor te indica cómo usarlo.",
+    },
+    {
+      id: "pruebas",
+      title: "Completa la certificación y empieza a emitir",
+      desc: "Pasa las pruebas que pide la DGII y entrega e-CF en cada venta.",
+    },
+  ];
+  fiscalFrom(store: Row | null): Row {
+    return {
+      rnc: store?.["rnc"] || "",
+      razon_social: store?.["razon_social"] || "",
+      direccion: store?.["direccion"] || "",
+      pasos_fe: [...(store?.["pasos_fe"] || [])],
+    };
+  }
+  monthStart() {
+    return this.today().slice(0, 8) + "01";
+  }
+  stepDone(id: string) {
+    return (this.fiscalForm["pasos_fe"] as string[]).includes(id);
+  }
+  toggleStep(id: string, done: boolean) {
+    const steps = (this.fiscalForm["pasos_fe"] as string[]).filter(
+      (x) => x !== id,
+    );
+    this.fiscalForm["pasos_fe"] = done ? [...steps, id] : steps;
+    void this.saveFiscal(true);
+  }
+  stepsDone() {
+    return this.pasosFe.filter((p) => this.stepDone(p.id)).length;
+  }
+  async saveFiscal(quiet = false) {
+    await this.run(async () => {
+      const store = await this.api("/colmado", "PUT", this.fiscalForm);
+      this.store.set(store);
+      this.fiscalForm = this.fiscalFrom(store);
+      this.fiscalDirty = false;
+      if (!quiet) this.notice.set("Datos fiscales guardados.");
+    });
+  }
+  async loadStore() {
+    try {
+      this.store.set(await this.api("/colmado"));
+    } catch {
+      // El recibo funciona sin datos fiscales.
+    }
+  }
+  /** Línea del recibo: base e ITBIS incluidos en el total. */
+  receiptTax(r: Row) {
+    const itbis = Number(r["impuesto"] || 0);
+    return { itbis, base: Number(r["total"] || 0) - itbis };
+  }
+  taxLabel(rate: any) {
+    return rate === null || rate === undefined
+      ? "Sin registrar"
+      : Number(rate) === 0
+        ? "Exento"
+        : rate + " %";
+  }
+  async exportSales() {
+    await this.run(async () => {
+      const response = await send(
+        "/api/ventas/exportar?desde=" + this.exportFrom + "&hasta=" + this.exportTo,
+        { headers: { Authorization: "Bearer " + this.token } },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body.detail === "string"
+            ? body.detail
+            : "No se pudo exportar. Revisa las fechas.",
+        );
+      }
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download =
+        "syscol-ventas-" + this.exportFrom + "-" + this.exportTo + ".csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      this.notice.set("Ventas exportadas en CSV.");
+    });
   }
 }
