@@ -12,12 +12,29 @@
             "browser": "src/main.ts",
             "index": "src/index.html",
             "tsConfig": "tsconfig.json",
-            "styles": ["src/styles.css"],
+            "styles": ["@fontsource-variable/figtree/wght.css", "src/styles.css"],
             "outputPath": "dist/syscol"
           },
           "configurations": {
             "production": {
               "outputHashing": "all",
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "700kB",
+                  "maximumError": "1MB"
+                }
+              ]
+            },
+            "demo": {
+              "outputHashing": "all",
+              "outputPath": "dist/syscol-demo",
+              "fileReplacements": [
+                {
+                  "replace": "src/app/transport.ts",
+                  "with": "src/app/transport.demo.ts"
+                }
+              ],
               "budgets": [
                 {
                   "type": "initial",
@@ -31,7 +48,10 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "buildTarget": "syscol:build" }
+          "options": { "buildTarget": "syscol:build" },
+          "configurations": {
+            "demo": { "buildTarget": "syscol:build:demo" }
+          }
         }
       }
     }

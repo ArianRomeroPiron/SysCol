@@ -24,7 +24,7 @@ const assert = require("node:assert/strict");
   await page.getByRole("button", { name: "Crear mi colmado" }).click();
   await page.getByRole("heading", { name: "Una nueva venta" }).waitFor();
   await page
-    .getByRole("button", { name: "📦 Inventario", exact: true })
+    .getByRole("button", { name: "Inventario", exact: true })
     .click();
   await page.getByLabel("Nombre de categoría").fill("Alimentos");
   await page
@@ -48,7 +48,7 @@ const assert = require("node:assert/strict");
     .getByRole("button", { name: "Registrar ajuste", exact: true })
     .click();
   await page.getByText("10 disponibles", { exact: false }).waitFor();
-  await page.getByRole("button", { name: "👥 Clientes", exact: true }).click();
+  await page.getByRole("button", { name: "Clientes", exact: true }).click();
   await page.getByRole("heading", { name: "Tus clientes", exact: true }).waitFor();
   await page.locator("[name=nombre]").fill("Ana Pérez");
   await page.locator("[name=telefono]").fill("+18095551234");
@@ -59,10 +59,10 @@ const assert = require("node:assert/strict");
     .click();
   await page.getByRole("cell", { name: "Ana Pérez", exact: true }).waitFor();
   await page
-    .getByRole("button", { name: "🧾 Punto de venta", exact: true })
+    .getByRole("button", { name: "Punto de venta", exact: true })
     .click();
-  await page.getByRole("button", { name: "+ Agregar", exact: true }).click();
-  await page.getByRole("button", { name: "+ Agregar", exact: true }).click();
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
+  await page.getByRole("button", { name: "Agregar", exact: true }).click();
   await page
     .getByLabel("Cliente", { exact: true })
     .selectOption({ label: "Ana Pérez" });
@@ -74,7 +74,7 @@ const assert = require("node:assert/strict");
   await page.getByRole("dialog").waitFor();
   await page.getByRole("button", { name: "Cerrar", exact: true }).click();
   await page
-    .getByRole("button", { name: "💳 Fiao y abonos", exact: true })
+    .getByRole("button", { name: "Fiao y abonos", exact: true })
     .click();
   await page.getByRole("spinbutton", { name: /Abono deuda/ }).fill("21");
   await page.getByRole("button", { name: "Abonar", exact: true }).click();

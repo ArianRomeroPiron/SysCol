@@ -1,6 +1,13 @@
-import { Component, signal, computed } from "@angular/core";
+import { Component, OnDestroy, signal, computed } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
+import {
+  DEMO,
+  DEMO_EMAIL,
+  DEMO_PASSWORD,
+  resetDemo,
+  send,
+} from "./transport";
 
 type Row = Record<string, any>;
 @Component({
@@ -9,13 +16,15 @@ type Row = Record<string, any>;
   imports: [CommonModule, FormsModule],
   templateUrl: "./app.html",
 })
-export class App {
+export class App implements OnDestroy {
   user = signal<Row | null>(null);
   tab = signal("ventas");
   busy = signal(false);
   error = signal("");
   notice = signal("");
   registering = false;
+  /** Versión de prueba: la API y los datos viven en este navegador. */
+  readonly demo = DEMO;
   credentials = { nombre: "", colmado: "", email: "", password: "" };
   products = signal<Row[]>([]);
   categories = signal<Row[]>([]);
@@ -42,17 +51,26 @@ export class App {
   category = "";
   search = "";
   customerSearch = "";
+  /** Clientes encontrados por la última búsqueda en el punto de venta. */
+  customerMatches = signal<number | null>(null);
   async findCustomers() {
     await this.run(async () => {
-      this.customers.set(
-        await this.api(
-          "/clientes?limit=200&q=" + encodeURIComponent(this.customerSearch),
-        ),
+      const found: Row[] = await this.api(
+        "/clientes?limit=200&q=" + encodeURIComponent(this.customerSearch),
       );
+      this.customers.set(found);
+      const q = this.customerSearch.trim();
+      this.customerMatches.set(q ? found.length : null);
+      if (q && found.length === 1) this.customerId = found[0]["id"];
+      else if (!found.some((c) => c["id"] === this.customerId))
+        this.customerId = null;
     });
   }
   offset = 0;
+  paymentsOffset = 0;
   pageSize = 50;
+  /** Último término buscado, para explicar resultados vacíos. */
+  searched = signal("");
   customerId: number | null = null;
   method = "efectivo";
   reference = this.uuid();
@@ -64,6 +82,118 @@ export class App {
   to = this.today();
   receipt = signal<Row | null>(null);
   private token = "";
+
+  /** Trazos de iconos (24×24, estilo línea) dibujados en el propio SVG. */
+  readonly icons: Record<string, string> = {
+    store:
+      "M2 7l4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4M2 7h20M22 7v3a2 2 0 0 1-2 2 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9 2.7 2.7 0 0 1-2 .9 2.7 2.7 0 0 1-2-.9A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7",
+    ventas:
+      "M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1ZM16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8M12 17.5v-11",
+    inventario:
+      "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73zM12 22V12M3.29 7 12 12l8.71-5M7.5 4.27l9 5.15",
+    clientes:
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M5 7a4 4 0 1 0 8 0 4 4 0 1 0-8 0M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
+    fiao: "M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4M2 6h4M2 10h4M2 14h4M2 18h4M21.38 5.63a1 1 0 1 0-3-3l-5.02 5a2 2 0 0 0-.5.86l-.84 2.87a.5.5 0 0 0 .62.62l2.87-.84a2 2 0 0 0 .86-.5z",
+    historial: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2",
+    reportes: "M3 3v16a2 2 0 0 0 2 2h16M18 17V9M13 17V5M8 17v-3",
+    equipo:
+      "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M5 7a4 4 0 1 0 8 0 4 4 0 1 0-8 0M19 8v6M22 11h-6",
+    search: "M3 11a8 8 0 1 0 16 0 8 8 0 1 0-16 0M21 21l-4.3-4.3",
+    plus: "M5 12h14M12 5v14",
+    x: "M18 6 6 18M6 6l12 12",
+    logout: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9",
+    chat: "M7.9 20A9 9 0 1 0 4 16.1L2 22Z",
+    print:
+      "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6M6 14h12v8H6z",
+    arrow: "M5 12h14M12 5l7 7-7 7",
+    left: "m15 18-6-6 6-6",
+    right: "m9 18 6-6-6-6",
+    edit: "M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z",
+    alert:
+      "M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
+    check: "M20 6 9 17l-5-5",
+  };
+
+  readonly sections: Record<string, { title: string; desc: string }> = {
+    ventas: {
+      title: "Una nueva venta",
+      desc: "Busca el producto, agrégalo a la cuenta y cobra.",
+    },
+    inventario: {
+      title: "Tu inventario",
+      desc: "Lo que hay en el colmado, a qué precio y cuándo reponer.",
+    },
+    clientes: {
+      title: "Tus clientes",
+      desc: "La gente del barrio, su límite de fiao y lo que deben.",
+    },
+    fiao: {
+      title: "Fiao y abonos",
+      desc: "Registra abonos parciales o salda una deuda. Los recordatorios se envían manualmente desde Clientes.",
+    },
+    historial: {
+      title: "Historial de ventas",
+      desc: "Cada venta registrada, con su recibo listo para imprimir.",
+    },
+    reportes: {
+      title: "Así va tu negocio",
+      desc: "Ventas, total vendido y fiao pendiente del período que elijas.",
+    },
+    equipo: {
+      title: "Tu equipo",
+      desc: "Quién trabaja contigo y qué puede hacer en SysCol.",
+    },
+  };
+
+  nav = computed(() => {
+    const items = [
+      { id: "ventas", label: "Punto de venta", short: "Vender" },
+      { id: "inventario", label: "Inventario", short: "Inventario" },
+      { id: "clientes", label: "Clientes", short: "Clientes" },
+      { id: "fiao", label: "Fiao y abonos", short: "Fiao" },
+      { id: "historial", label: "Historial de ventas", short: "Historial" },
+    ];
+    if (this.isManager())
+      items.push({ id: "reportes", label: "Reportes", short: "Reportes" });
+    if (this.user()?.["rol"] === "dueno")
+      items.push({ id: "equipo", label: "Mi equipo", short: "Equipo" });
+    return items;
+  });
+
+  cartUnits = computed(() =>
+    this.cart().reduce((sum, x) => sum + x.cantidad, 0),
+  );
+
+  readonly methods: Record<string, string> = {
+    efectivo: "Efectivo",
+    tarjeta: "Tarjeta",
+    transferencia: "Transferencia",
+    fiao: "Fiao",
+  };
+  readonly roles: Record<string, string> = {
+    dueno: "Dueño",
+    admin: "Administrador",
+    cajero: "Cajero",
+  };
+
+  categoryName(id: number) {
+    return this.categories().find((c) => c["id"] === id)?.["nombre"] || "";
+  }
+  initial(text: string) {
+    return (text || "?").trim().charAt(0).toUpperCase();
+  }
+  /** Tono estable por categoría para reconocer los productos de un vistazo. */
+  tint(id: number) {
+    return "tint-" + (Math.abs(Number(id) || 0) % 6);
+  }
+  percent(part: any, whole: any) {
+    const w = Number(whole) || 0;
+    if (w <= 0) return 0;
+    return Math.min(100, Math.max(0, Math.round((Number(part) / w) * 100)));
+  }
+  qtyInCart(id: number) {
+    return this.cart().find((x) => x.id_producto === id)?.cantidad || 0;
+  }
 
   newProduct(): Row {
     return {
@@ -105,7 +235,7 @@ export class App {
     const headers: Record<string, string> = {};
     if (this.token) headers["Authorization"] = "Bearer " + this.token;
     if (data !== undefined) headers["Content-Type"] = "application/json";
-    const response = await fetch("/api" + path, {
+    const response = await send("/api" + path, {
       method,
       headers,
       body: data === undefined ? undefined : JSON.stringify(data),
@@ -145,7 +275,7 @@ export class App {
         username: this.credentials.email,
         password: this.credentials.password,
       });
-      const response = await fetch("/api/auth/login", { method: "POST", body });
+      const response = await send("/api/auth/login", { method: "POST", body });
       const result = await response.json();
       if (!response.ok)
         throw new Error(result.detail || "No se pudo iniciar sesión");
@@ -153,9 +283,29 @@ export class App {
       this.user.set(await this.api("/auth/me"));
       this.credentials.password = "";
       await this.load();
+      this.startAutoRefresh();
     });
   }
+  async useDemoAccount() {
+    this.registering = false;
+    this.credentials.email = DEMO_EMAIL;
+    this.credentials.password = DEMO_PASSWORD;
+    await this.login();
+  }
+  restartDemo() {
+    if (
+      !confirm(
+        "¿Borrar todo lo que registraste y volver a los datos de ejemplo?",
+      )
+    )
+      return;
+    resetDemo();
+    this.logout();
+    this.notice.set("La demo volvió a los datos de ejemplo.");
+  }
   logout() {
+    this.stopAutoRefresh();
+    clearTimeout(this.searchTimer);
     this.token = "";
     this.user.set(null);
     this.cart.set([]);
@@ -177,13 +327,24 @@ export class App {
     this.stockValues = {};
     this.stockReasons = {};
     this.reference = this.uuid();
+    this.offset = 0;
+    this.paymentsOffset = 0;
+    this.search = "";
+    this.customerSearch = "";
+    this.searched.set("");
+    this.customerMatches.set(null);
     this.tab.set("ventas");
   }
   async navigate(tab: string) {
     if (this.busy()) return;
+    clearTimeout(this.searchTimer);
     this.tab.set(tab);
     this.offset = 0;
+    this.paymentsOffset = 0;
     this.search = "";
+    this.customerSearch = "";
+    this.searched.set("");
+    this.customerMatches.set(null);
     await this.run(() => this.load());
   }
   async load() {
@@ -196,9 +357,15 @@ export class App {
             "/productos" + query + "&q=" + encodeURIComponent(this.search),
           ),
         );
+        this.searched.set(this.search.trim());
         this.categories.set(await this.api("/categorias?limit=200"));
         if (this.tab() === "ventas")
-          this.customers.set(await this.api("/clientes?limit=200"));
+          this.customers.set(
+            await this.api(
+              "/clientes?limit=200&q=" +
+                encodeURIComponent(this.customerSearch),
+            ),
+          );
         break;
       case "clientes":
         this.customers.set(
@@ -209,10 +376,18 @@ export class App {
               encodeURIComponent(this.customerSearch),
           ),
         );
+        this.searched.set(this.customerSearch.trim());
         break;
       case "fiao":
         this.debts.set(await this.api("/deudas" + query));
-        this.payments.set(await this.api("/abonos" + query));
+        this.payments.set(
+          await this.api(
+            "/abonos?offset=" +
+              this.paymentsOffset +
+              "&limit=" +
+              this.pageSize,
+          ),
+        );
         this.customers.set(await this.api("/clientes?limit=200"));
         break;
       case "historial":
@@ -231,6 +406,99 @@ export class App {
   async next(delta: number) {
     this.offset = Math.max(0, this.offset + delta * this.pageSize);
     await this.run(() => this.load());
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  async nextPayments(delta: number) {
+    this.paymentsOffset = Math.max(
+      0,
+      this.paymentsOffset + delta * this.pageSize,
+    );
+    await this.run(() => this.load());
+  }
+  /** Una página llena indica que puede haber más registros después. */
+  hasMore(rows: Row[]) {
+    return rows.length >= this.pageSize;
+  }
+
+  // Búsqueda mientras se escribe
+  private searchTimer?: ReturnType<typeof setTimeout>;
+  searchSoon(action: "lista" | "clientesVenta" = "lista") {
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      if (this.busy()) return this.searchSoon(action);
+      if (action === "clientesVenta") void this.findCustomers();
+      else void this.searchNow();
+    }, 300);
+  }
+  async searchNow() {
+    clearTimeout(this.searchTimer);
+    this.offset = 0;
+    await this.run(() => this.load());
+  }
+  clearSearch(field: "search" | "customerSearch") {
+    this[field] = "";
+    if (field === "customerSearch" && this.tab() === "ventas")
+      void this.findCustomers();
+    else void this.searchNow();
+  }
+
+  // Actualización automática: otros dispositivos (cajero, dueño) ven lo mismo.
+  private refreshTimer?: ReturnType<typeof setInterval>;
+  private refreshing = false;
+  private onVisible = () => {
+    if (document.visibilityState === "visible") void this.refresh();
+  };
+  startAutoRefresh() {
+    this.stopAutoRefresh();
+    this.refreshTimer = setInterval(() => void this.refresh(), 20000);
+    document.addEventListener("visibilitychange", this.onVisible);
+    window.addEventListener("focus", this.onVisible);
+  }
+  stopAutoRefresh() {
+    clearInterval(this.refreshTimer);
+    document.removeEventListener("visibilitychange", this.onVisible);
+    window.removeEventListener("focus", this.onVisible);
+  }
+  /** Recarga en silencio la sección actual, sin interrumpir lo que se hace. */
+  async refresh() {
+    if (
+      !this.user() ||
+      this.busy() ||
+      this.refreshing ||
+      this.receipt() ||
+      document.visibilityState !== "visible"
+    )
+      return;
+    this.refreshing = true;
+    try {
+      await this.load();
+    } catch {
+      // Silencioso: el próximo intento o la próxima acción mostrará el error.
+    } finally {
+      this.refreshing = false;
+    }
+  }
+  ngOnDestroy() {
+    this.stopAutoRefresh();
+    clearTimeout(this.searchTimer);
+  }
+  /** Lleva el formulario a la vista para editar. */
+  editProduct(p: Row) {
+    this.product = { ...p };
+    this.focusForm("product-form");
+  }
+  editCustomer(c: Row) {
+    this.customer = { ...c };
+    this.focusForm("customer-form");
+  }
+  private focusForm(id: string) {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      el?.querySelector<HTMLInputElement>("input")?.focus({
+        preventScroll: true,
+      });
+    });
   }
   add(p: Row) {
     if (!p["activo"] || p["stock"] < 1) return;
@@ -294,9 +562,11 @@ export class App {
   }
   async saveCategory() {
     await this.run(async () => {
-      await this.api("/categorias", "POST", { nombre: this.category });
+      const nombre = this.category.trim();
+      await this.api("/categorias", "POST", { nombre });
       this.category = "";
       await this.load();
+      this.notice.set("Categoría «" + nombre + "» agregada.");
     });
   }
   async adjust(p: Row) {
@@ -305,6 +575,8 @@ export class App {
         cantidad: Number(this.stockValues[p["id"]]),
         motivo: this.stockReasons[p["id"]] || "",
       });
+      delete this.stockValues[p["id"]];
+      delete this.stockReasons[p["id"]];
       await this.load();
       this.notice.set("Ajuste registrado.");
     });
@@ -354,6 +626,7 @@ export class App {
       await this.api("/auth/usuarios", "POST", this.employee);
       this.employee = { nombre: "", email: "", password: "", rol: "cajero" };
       await this.load();
+      this.notice.set("Empleado creado.");
     });
   }
   async toggle(e: Row) {
@@ -363,6 +636,9 @@ export class App {
         "PATCH",
       );
       await this.load();
+      this.notice.set(
+        e["nombre"] + (e["esta_activo"] ? " fue desactivado." : " fue activado."),
+      );
     });
   }
   print() {

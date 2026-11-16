@@ -37,6 +37,30 @@ def owned(db, cls, id, user, lock=False):
     return obj
 
 
+_ACCENTS = {
+    "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u", "ü": "u", "ñ": "n",
+    "Á": "a", "É": "e", "Í": "i", "Ó": "o", "Ú": "u", "Ü": "u", "Ñ": "n",
+}  # fmt: skip
+
+
+def _fold_text(text: str) -> str:
+    text = text.strip().lower()
+    return "".join(_ACCENTS.get(c, c) for c in text)
+
+
+def _fold(column):
+    """Minúsculas y sin tildes en SQL, para que «cafe» encuentre «Café»."""
+    expr = func.lower(column)
+    for accented, plain in _ACCENTS.items():
+        expr = func.replace(expr, accented, plain)
+    return expr
+
+
+def _contains(q: str) -> str:
+    escaped = _fold_text(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return "%" + escaped + "%"
+
+
 def page(db, cls, user, offset, limit):
     return db.scalars(
         select(cls)
@@ -77,8 +101,12 @@ def products(
     db: Session = Depends(get_db),
 ):
     query = select(Producto).where(Producto.colmado_id == user.colmado_id)
-    if q:
-        query = query.where(Producto.nombre.ilike("%" + q + "%") | (Producto.codigo_barras == q))
+    if q.strip():
+        pattern = _contains(q)
+        query = query.where(
+            _fold(Producto.nombre).like(pattern, escape="\\")
+            | func.lower(Producto.codigo_barras).like(pattern, escape="\\")
+        )
     if bajo_stock:
         query = query.where(Producto.stock <= Producto.stock_minimo, Producto.activo.is_(True))
     return db.scalars(query.order_by(Producto.nombre, Producto.id).offset(offset).limit(limit)).all()
@@ -153,8 +181,12 @@ def customers(
     db: Session = Depends(get_db),
 ):
     query = select(Cliente).where(Cliente.colmado_id == user.colmado_id)
-    if q:
-        query = query.where(Cliente.nombre.ilike("%" + q + "%") | Cliente.telefono.contains(q))
+    if q.strip():
+        pattern = _contains(q)
+        query = query.where(
+            _fold(Cliente.nombre).like(pattern, escape="\\")
+            | Cliente.telefono.like(pattern, escape="\\")
+        )
     return db.scalars(query.order_by(Cliente.nombre, Cliente.id).offset(offset).limit(limit)).all()
 
 
