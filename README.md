@@ -10,6 +10,8 @@ Gestión de inventario, ventas y fiao para colmados dominicanos, con interfaz ad
 - Punto de venta con carrito, efectivo, tarjeta, transferencia o fiao. El servidor determina precios, verifica existencias y registra todo en una transacción.
 - Clientes, límites de crédito, historial de deudas, abonos parciales e idempotencia para reintentos de ventas y abonos.
 - Historial de ventas y recibos internos imprimibles.
+- Guía de primeros pasos para dueños y administradores: aparece al crear la cuenta, marca sola cada paso según los datos reales (categoría, producto, unidades, cliente, primera venta, cajero y datos fiscales) y lleva al formulario de cada uno. Se puede ocultar y volver a mostrar.
+- Sección **Ayuda** con instrucciones paso a paso por tema (vender, inventario, fiao y WhatsApp, equipo, facturación), búsqueda y botones que llevan a la pantalla correspondiente. Cada rol ve solo lo que puede hacer.
 - Preparación para la facturación electrónica (e-CF, Ley 32-23): tasa de ITBIS por producto (18 %, 16 % o exento) con el ITBIS incluido desglosado en cada venta, recibo y reporte; RNC o cédula y razón social de clientes y del colmado; sección **Facturación** con los pasos de incorporación ante la DGII, el volumen de facturas de los últimos 30 días frente al límite del Facturador Gratuito (150 al mes) y el ITBIS del mes por tasa; exportación de ventas en CSV para el proveedor de e-CF o el contador. **SysCol aún no emite e-CF**: los recibos siguen siendo comprobantes internos.
 - Reportes por período: cantidad y total de ventas, productos más vendidos y deuda pendiente actual. Los días del reporte corresponden a República Dominicana.
 - Recordatorios manuales por WhatsApp; integración automática opcional con Twilio, desactivada por defecto.

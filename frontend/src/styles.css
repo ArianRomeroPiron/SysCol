@@ -1369,6 +1369,231 @@ tr.settled td {
   padding: 3px 0;
 }
 
+/* Guía de primeros pasos */
+.guide {
+  border-color: #f1cdb8;
+}
+.guidehead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.guidehead h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+}
+.guidehead p {
+  margin: 0 0 16px;
+  max-width: 62ch;
+}
+.guidehead .text {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.guideprogress {
+  margin-bottom: 6px;
+}
+.guideprogress > span {
+  background: var(--action);
+  transition: width 0.6s var(--spring);
+}
+.guidecount {
+  display: block;
+  margin-bottom: 10px;
+}
+.guidesteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  column-gap: 24px;
+}
+.guidesteps li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.stepmark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-2);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.guidesteps li.current .stepmark {
+  border-color: var(--action);
+  color: var(--action);
+  background: var(--action-soft);
+}
+.guidesteps li.done .stepmark {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #fff;
+}
+.stepmark .i {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.6;
+}
+.steptext strong {
+  display: block;
+  font-size: 0.95rem;
+}
+.steptext span {
+  font-size: 0.83rem;
+  color: var(--ink-2);
+}
+.guidesteps li.done .steptext strong {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.guidesteps li.done .steptext span {
+  color: var(--ok);
+  font-weight: 600;
+}
+.guidesteps button {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.guidepill {
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--action-soft);
+  color: var(--action-soft-ink);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.guidepill:hover {
+  background: var(--action);
+  border-color: var(--action);
+  color: #fff;
+}
+.helpbtn.active {
+  background: var(--ground-2);
+  color: var(--ink);
+}
+/* Resalta el formulario al que lleva la guía o la ayuda. */
+.spotlight {
+  animation: spotlight 1.8s ease-out;
+}
+@keyframes spotlight {
+  0%,
+  35% {
+    box-shadow:
+      0 0 0 3px var(--action),
+      0 0 0 9px var(--action-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Ayuda */
+.helptop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.helptop .field {
+  flex: 1 1 320px;
+}
+.helptopic {
+  padding-bottom: 8px;
+}
+.helptopic h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.helpicon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--action-soft);
+  color: var(--action-soft-ink);
+}
+.howto {
+  border-top: 1px solid var(--line);
+}
+.howto summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+.howto summary::-webkit-details-marker {
+  display: none;
+}
+.howto summary::after {
+  content: "";
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid var(--ink-2);
+  border-bottom: 2px solid var(--ink-2);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.25s var(--spring);
+}
+.howto[open] summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+.howto summary:hover {
+  color: var(--action);
+}
+.howto summary:focus-visible {
+  outline: 2.5px solid var(--action);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.howtobody {
+  padding: 0 0 16px;
+}
+.howtobody ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  max-width: 70ch;
+  line-height: 1.5;
+}
+.howtobody li::marker {
+  color: var(--action);
+  font-weight: 700;
+}
+.howtonote {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--ground);
+  font-size: 0.88rem;
+  max-width: 70ch;
+}
+
 /* Paginación */
 .pagination {
   display: flex;
@@ -1738,6 +1963,23 @@ tr.settled td {
   .verdict {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+  .guidehead {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .guidesteps li {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .guidesteps li button {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .guidepill span {
+    display: none;
+  }
+  .helpbtn {
+    padding: 8px;
   }
   .verdictnum {
     justify-self: start;

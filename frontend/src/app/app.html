@@ -182,6 +182,19 @@
         ><span>Reiniciar demo</span>
       </button>
       }
+      @if(guideActive()&&guide()&&!guideComplete()&&tab()!=='ventas'){
+      <button class="guidepill" (click)="showGuide()">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['flag']" /></svg><span>Guía {{guideDone()}}/{{guide()!.length}}</span>
+      </button>
+      }
+      <button
+        class="ghost helpbtn"
+        [class.active]="tab()==='ayuda'"
+        [attr.aria-current]="tab()==='ayuda'?'page':null"
+        (click)="navigate('ayuda')"
+      >
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['help']" /></svg><span>Ayuda</span>
+      </button>
       <div class="who">
         <span class="avatar" aria-hidden="true"
           >{{initial(user()!['nombre'])}}</span
@@ -201,6 +214,61 @@
         <h1>{{sections[tab()].title}}</h1>
         <p>{{sections[tab()].desc}}</p>
       </div>
+      @if(tab()==='ventas'&&guideActive()&&guide();as steps){
+      <section class="panel guide" id="guide" aria-labelledby="guide-title">
+        <div class="guidehead">
+          <div>
+            <h2 id="guide-title">
+              {{guideComplete()?'¡Tu colmado está listo!':justRegistered?'Bienvenido a '+(store()?.['nombre']||'SysCol'):'Primeros pasos'}}
+            </h2>
+            <p>
+              {{guideComplete()?'Completaste todos los pasos. Si te surge una duda, la encuentras en Ayuda.':'Sigue estos pasos para dejar SysCol listo para trabajar. Se marcan solos cuando los completas.'}}
+            </p>
+          </div>
+          <button type="button" class="text" (click)="hideGuide()">
+            Ocultar guía
+          </button>
+        </div>
+        <div
+          class="usage guideprogress"
+          role="progressbar"
+          aria-label="Avance de la guía"
+          [attr.aria-valuenow]="guideDone()"
+          aria-valuemin="0"
+          [attr.aria-valuemax]="steps.length"
+        >
+          <span [style.width.%]="percent(guideDone(),steps.length)"></span>
+        </div>
+        <small class="guidecount"
+          >{{guideDone()}} de {{steps.length}} pasos listos</small
+        >
+        <ol class="guidesteps">
+          @for(step of steps;track step.id){
+          <li
+            [class.done]="step.done"
+            [class.current]="nextStep()?.id===step.id"
+          >
+            <span class="stepmark" aria-hidden="true"
+              >@if(step.done){<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['check']" /></svg>}@else{{{$index+1}}}</span
+            >
+            <div class="steptext">
+              <strong>{{step.title}}</strong>
+              <span>{{step.done?'Listo':step.desc}}</span>
+            </div>
+            @if(!step.done){<button
+              type="button"
+              [class.primary]="nextStep()?.id===step.id"
+              [class.subtle]="nextStep()?.id!==step.id"
+              [disabled]="busy()"
+              (click)="goToStep(step)"
+            >
+              {{step.action}}
+            </button>}
+          </li>
+          }
+        </ol>
+      </section>
+      }
       @if(tab()==='ventas'||tab()==='inventario'){
       <form class="searchbar" role="search" (ngSubmit)="searchNow()">
         <div class="field">
@@ -518,7 +586,7 @@
             </button>
           </div>
         </form>
-        <div class="subsection">
+        <div class="subsection" id="category-form">
           <h3>Nueva categoría</h3>
           <form class="searchbar" (ngSubmit)="saveCategory()">
             <div class="field plain">
@@ -1041,7 +1109,7 @@
           >
         </section>
         <div>
-          <section class="panel">
+          <section class="panel" id="fiscal-form">
             <h2>Datos fiscales del colmado</h2>
             <form class="stack" (ngSubmit)="saveFiscal()">
               <label
@@ -1146,8 +1214,60 @@
         SysCol todavía no emite e-CF: sus recibos son comprobantes internos.
         Esta sección te ayuda a organizar tus datos y pasos con la DGII.
       </p>
+      } @if(tab()==='ayuda'){
+      <div class="helptop">
+        <div class="field">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['search']" /></svg><input
+            type="search"
+            name="helpQuery"
+            aria-label="Buscar en la ayuda"
+            autocomplete="off"
+            placeholder="¿Qué quieres hacer? Por ejemplo: fiar, abono, ITBIS"
+            [(ngModel)]="helpQuery"
+          />
+        </div>
+        @if(isManager()){<button type="button" class="subtle" (click)="showGuide()">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['flag']" /></svg>Ver la guía de primeros pasos
+        </button>}
+      </div>
+      @for(topic of helpVisible();track topic.id){
+      <section class="panel helptopic" [attr.aria-labelledby]="'help-'+topic.id">
+        <h2 [id]="'help-'+topic.id">
+          <span class="helpicon"
+            ><svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+              <path [attr.d]="icons[topic.icon]" /></svg></span
+          >{{topic.title}}
+        </h2>
+        @for(item of topic.items;track item.q){
+        <details class="howto" [open]="!!helpQuery.trim()">
+          <summary>{{item.q}}</summary>
+          <div class="howtobody">
+            <ol>
+              @for(step of item.steps;track $index){
+              <li>{{step}}</li>
+              }
+            </ol>
+            @if(item.note){<p class="howtonote">{{item.note}}</p>}
+            @if(item.go;as go){<button
+              type="button"
+              class="subtle"
+              (click)="goToStep(go)"
+            >
+              {{go.label}}<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['arrow']" /></svg>
+            </button>}
+          </div>
+        </details>
+        }
+      </section>
+      } @empty {
+      <div class="emptystate">
+        <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons['help']" /></svg>
+        <p>No encontramos ayuda sobre «{{helpQuery}}». Prueba con otra palabra, como «venta», «fiao» o «producto».</p>
+        <button type="button" (click)="helpQuery=''">Ver toda la ayuda</button>
+      </div>
+      }
       } @if(tab()==='equipo'){
-      <section class="panel">
+      <section class="panel" id="employee-form">
         <h2>Agregar empleado</h2>
         <form class="fields" (ngSubmit)="saveEmployee()">
           <label

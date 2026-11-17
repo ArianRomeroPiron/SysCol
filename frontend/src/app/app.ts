@@ -116,6 +116,9 @@ export class App implements OnDestroy {
       "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7ZM14 2v4a2 2 0 0 0 2 2h4M9 15l2 2 4-4",
     download: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
     external: "M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
+    help: "M3 12a9 9 0 1 0 18 0 9 9 0 1 0-18 0M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01",
+    flag: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7",
+    tag: "M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42zM7 7.5a.5.5 0 1 0 1 0 .5.5 0 1 0-1 0",
   };
 
   readonly sections: Record<string, { title: string; desc: string }> = {
@@ -150,6 +153,10 @@ export class App implements OnDestroy {
     equipo: {
       title: "Tu equipo",
       desc: "Quién trabaja contigo y qué puede hacer en SysCol.",
+    },
+    ayuda: {
+      title: "Ayuda",
+      desc: "Cómo hacer cada cosa en SysCol, paso a paso.",
     },
   };
 
@@ -271,6 +278,7 @@ export class App implements OnDestroy {
     this.notice.set("");
     try {
       await action();
+      if (this.guideActive() && !this.guideComplete()) void this.loadGuide();
     } catch (e) {
       this.error.set(
         e instanceof Error
@@ -296,8 +304,11 @@ export class App implements OnDestroy {
       this.token = result.access_token;
       this.user.set(await this.api("/auth/me"));
       this.credentials.password = "";
+      this.justRegistered = this.registering;
+      this.registering = false;
       await this.load();
       void this.loadStore();
+      void this.loadGuide();
       this.startAutoRefresh();
     });
   }
@@ -344,6 +355,9 @@ export class App implements OnDestroy {
     this.reference = this.uuid();
     this.store.set(null);
     this.fiscal.set(null);
+    this.guide.set(null);
+    this.justRegistered = false;
+    this.helpQuery = "";
     this.fiscalForm = this.fiscalFrom(null);
     this.fiscalDirty = false;
     this.offset = 0;
@@ -364,6 +378,7 @@ export class App implements OnDestroy {
     this.customerSearch = "";
     this.searched.set("");
     this.customerMatches.set(null);
+    this.helpQuery = "";
     await this.run(() => this.load());
   }
   async load() {
@@ -518,13 +533,22 @@ export class App implements OnDestroy {
     this.focusForm("customer-form");
   }
   private focusForm(id: string) {
+    this.focusTarget("#" + id);
+  }
+  /** Lleva a un formulario o campo y pone el cursor en su primer campo. */
+  private focusTarget(selector: string, attempt = 0) {
     setTimeout(() => {
-      const el = document.getElementById(id);
+      const el = document.querySelector<HTMLElement>(selector);
+      if (!el && attempt < 10) return this.focusTarget(selector, attempt + 1);
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
-      el?.querySelector<HTMLInputElement>("input")?.focus({
-        preventScroll: true,
-      });
-    });
+      const field =
+        el instanceof HTMLInputElement
+          ? el
+          : el?.querySelector<HTMLInputElement>("input, select");
+      field?.focus({ preventScroll: true });
+      el?.classList.add("spotlight");
+      setTimeout(() => el?.classList.remove("spotlight"), 1800);
+    }, 120);
   }
   add(p: Row) {
     if (!p["activo"] || p["stock"] < 1) return;
@@ -671,6 +695,162 @@ export class App implements OnDestroy {
     window.print();
   }
 
+  // ---------- Guía de primeros pasos ----------
+  guide = signal<GuideStep[] | null>(null);
+  /** Acaba de crear su cuenta: la guía da la bienvenida. */
+  justRegistered = false;
+  private guideKey() {
+    return "syscol-guia-oculta:" + (this.user()?.["email"] || "");
+  }
+  guideHidden = signal(false);
+  guideActive() {
+    return this.isManager() && !this.guideHidden();
+  }
+  guideDone = computed(() => (this.guide() || []).filter((s) => s.done).length);
+  guideComplete = computed(() => {
+    const steps = this.guide();
+    return !!steps && steps.every((s) => s.done);
+  });
+  nextStep = computed(() => (this.guide() || []).find((s) => !s.done) || null);
+  async loadGuide() {
+    if (!this.isManager()) return;
+    try {
+      this.guideHidden.set(localStorage.getItem(this.guideKey()) === "1");
+    } catch {
+      this.guideHidden.set(false);
+    }
+    if (this.guideHidden()) return;
+    try {
+      const owner = this.user()?.["rol"] === "dueno";
+      const [store, cats, prods, clients, sales, team] = await Promise.all([
+        this.api("/colmado"),
+        this.api("/categorias?limit=1"),
+        this.api("/productos?limit=200"),
+        this.api("/clientes?limit=1"),
+        this.api("/ventas?limit=1"),
+        owner ? this.api("/auth/usuarios") : Promise.resolve([]),
+      ]);
+      const steps: GuideStep[] = [
+        {
+          id: "categoria",
+          title: "Crea tus categorías",
+          desc: "Agrupa lo que vendes: víveres, bebidas, limpieza…",
+          done: cats.length > 0,
+          tab: "inventario",
+          target: "#category-form",
+          action: "Crear categoría",
+        },
+        {
+          id: "producto",
+          title: "Agrega tus productos",
+          desc: "Nombre, precio final, código de barras y su ITBIS.",
+          done: prods.length > 0,
+          tab: "inventario",
+          target: "#product-form",
+          action: "Agregar producto",
+        },
+        {
+          id: "stock",
+          title: "Registra cuántas unidades tienes",
+          desc: "Usa «Ajuste de unidades» con el motivo «Compra inicial».",
+          done: prods.some((p: Row) => p["stock"] > 0),
+          tab: "inventario",
+          target: ".adjust input",
+          action: "Registrar unidades",
+        },
+        {
+          id: "cliente",
+          title: "Anota a tus clientes de fiao",
+          desc: "Con su teléfono y el límite de crédito que les das.",
+          done: clients.length > 0,
+          tab: "clientes",
+          target: "#customer-form",
+          action: "Agregar cliente",
+        },
+        {
+          id: "venta",
+          title: "Haz tu primera venta",
+          desc: "Busca un producto, agrégalo a la cuenta y cobra.",
+          done: sales.length > 0,
+          tab: "ventas",
+          target: "[name=search]",
+          action: "Vender",
+        },
+      ];
+      if (owner)
+        steps.push({
+          id: "equipo",
+          title: "Agrega a tu cajero",
+          desc: "Cada persona entra con su propia cuenta. Es opcional.",
+          done: team.length > 1,
+          tab: "equipo",
+          target: "#employee-form",
+          action: "Agregar empleado",
+        });
+      steps.push({
+        id: "fiscal",
+        title: "Completa los datos fiscales",
+        desc: "RNC y razón social para tus recibos y la facturación electrónica.",
+        done: !!(store["rnc"] || store["razon_social"]),
+        tab: "fiscal",
+        target: "#fiscal-form",
+        action: "Completar datos",
+      });
+      this.guide.set(steps);
+    } catch {
+      // La guía es una ayuda: si falla, la app sigue igual.
+    }
+  }
+  async goToStep(step: { tab: string; target: string }) {
+    if (this.tab() !== step.tab) await this.navigate(step.tab);
+    this.focusTarget(step.target);
+  }
+  hideGuide() {
+    try {
+      localStorage.setItem(this.guideKey(), "1");
+    } catch {
+      /* sin almacenamiento */
+    }
+    this.guideHidden.set(true);
+    this.justRegistered = false;
+    this.notice.set("Guía oculta. Puedes volver a verla desde Ayuda.");
+  }
+  async showGuide() {
+    try {
+      localStorage.removeItem(this.guideKey());
+    } catch {
+      /* sin almacenamiento */
+    }
+    this.guideHidden.set(false);
+    await this.navigate("ventas");
+    await this.loadGuide();
+    this.focusTarget("#guide");
+  }
+
+  // ---------- Ayuda ----------
+  helpQuery = "";
+  readonly helpTopics: HelpTopic[] = HELP;
+  helpVisible() {
+    const q = fold(this.helpQuery);
+    const manager = this.isManager();
+    const owner = this.user()?.["rol"] === "dueno";
+    return this.helpTopics
+      .map((t) => ({
+        ...t,
+        items: t.items.filter(
+          (i) =>
+            (!i.role ||
+              (i.role === "manager" && manager) ||
+              (i.role === "owner" && owner)) &&
+            (!q || fold(t.title + " " + i.q + " " + i.steps.join(" ")).includes(q)),
+        ),
+      }))
+      .filter((t) => t.items.length);
+  }
+  helpCount() {
+    return this.helpVisible().reduce((n, t) => n + t.items.length, 0);
+  }
+
   // ---------- Facturación electrónica ----------
   /** Datos del colmado (nombre y datos fiscales) para recibos y e-CF. */
   store = signal<Row | null>(null);
@@ -796,3 +976,268 @@ export class App implements OnDestroy {
     });
   }
 }
+
+interface GuideStep {
+  id: string;
+  title: string;
+  desc: string;
+  done: boolean;
+  tab: string;
+  target: string;
+  action: string;
+}
+
+interface HelpItem {
+  q: string;
+  steps: string[];
+  note?: string;
+  /** Quién puede hacerlo: todos, administradores o solo el dueño. */
+  role?: "manager" | "owner";
+  go?: { label: string; tab: string; target: string };
+}
+interface HelpTopic {
+  id: string;
+  title: string;
+  icon: string;
+  items: HelpItem[];
+}
+
+function fold(text: string) {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+const HELP: HelpTopic[] = [
+  {
+    id: "vender",
+    title: "Vender",
+    icon: "ventas",
+    items: [
+      {
+        q: "¿Cómo hago una venta?",
+        steps: [
+          "En Punto de venta, busca el producto por nombre o código de barras.",
+          "Toca «Agregar» una vez por cada unidad. La cuenta se arma a la derecha (abajo en el celular).",
+          "Elige el método de pago: efectivo, tarjeta, transferencia o fiao.",
+          "Toca «Registrar venta». Se abre el recibo para imprimirlo si el cliente lo pide.",
+        ],
+        go: { label: "Ir a vender", tab: "ventas", target: "[name=search]" },
+      },
+      {
+        q: "¿Cómo vendo fiado?",
+        steps: [
+          "Agrega los productos a la cuenta.",
+          "En «Buscar cliente» escribe su nombre o teléfono; si hay uno solo, queda seleccionado.",
+          "Elige «Fiao» como método de pago y registra la venta.",
+        ],
+        note: "Si la venta pasa el límite de crédito del cliente, SysCol no la deja registrar.",
+        go: { label: "Ir a vender", tab: "ventas", target: "[name=search]" },
+      },
+      {
+        q: "No puedo agregar un producto a la cuenta",
+        steps: [
+          "Si dice «0 disponibles», registra unidades en Inventario con «Ajuste de unidades».",
+          "Si dice «Inactivo», edítalo en Inventario y marca «Producto activo».",
+        ],
+        role: "manager",
+        go: { label: "Ir a Inventario", tab: "inventario", target: "[name=search]" },
+      },
+      {
+        q: "¿Dónde veo una venta anterior o reimprimo un recibo?",
+        steps: ["En Historial de ventas, toca «Ver recibo» y luego «Imprimir»."],
+        note: "El recibo de SysCol es un comprobante interno, no una factura fiscal.",
+        go: { label: "Ir al historial", tab: "historial", target: "table" },
+      },
+    ],
+  },
+  {
+    id: "inventario",
+    title: "Inventario",
+    icon: "inventario",
+    items: [
+      {
+        q: "¿Cómo agrego un producto?",
+        steps: [
+          "Si no tienes categorías, crea una en «Nueva categoría».",
+          "En «Agregar producto» escribe nombre, categoría, costo y precio final de venta.",
+          "Elige el ITBIS incluido en el precio: 18 %, 16 % o exento.",
+          "Guarda. El producto empieza con 0 unidades: regístralas con un ajuste.",
+        ],
+        role: "manager",
+        go: { label: "Agregar producto", tab: "inventario", target: "#product-form" },
+      },
+      {
+        q: "¿Cómo registro una compra o una merma?",
+        steps: [
+          "Busca el producto en Inventario.",
+          "En «Ajuste de unidades» escribe cuántas entran (por ejemplo 24) o salen con signo menos (por ejemplo -2).",
+          "Escribe el motivo, como «Compra al suplidor» o «Se dañó», y toca «Registrar ajuste».",
+        ],
+        role: "manager",
+        go: { label: "Ir a Inventario", tab: "inventario", target: ".adjust input" },
+      },
+      {
+        q: "¿Cómo activo el aviso de poco inventario?",
+        steps: [
+          "Edita el producto y pon en «Alerta de stock» el mínimo que quieres tener.",
+          "Cuando quede esa cantidad o menos, el producto se marca en ámbar con un aviso.",
+        ],
+        role: "manager",
+        go: { label: "Ir a Inventario", tab: "inventario", target: "#product-form" },
+      },
+      {
+        q: "¿Cómo dejo de vender un producto sin borrarlo?",
+        steps: [
+          "Edita el producto y desmarca «Producto activo».",
+          "Su historial de ventas se conserva y ya no se puede agregar a la cuenta.",
+        ],
+        role: "manager",
+        go: { label: "Ir a Inventario", tab: "inventario", target: "#product-form" },
+      },
+    ],
+  },
+  {
+    id: "fiao",
+    title: "Clientes y fiao",
+    icon: "fiao",
+    items: [
+      {
+        q: "¿Cómo agrego un cliente para fiarle?",
+        steps: [
+          "En Clientes, escribe su nombre y su teléfono con código de país (+1809…).",
+          "Pon el límite de crédito: lo máximo que le fiarías.",
+          "Guarda. Ya puedes elegirlo al vender con «Fiao».",
+        ],
+        go: { label: "Agregar cliente", tab: "clientes", target: "#customer-form" },
+      },
+      {
+        q: "¿Cómo registro un abono?",
+        steps: [
+          "En Fiao y abonos, busca la deuda del cliente.",
+          "Escribe el monto que te pagó y toca «Abonar». Puede ser parcial.",
+          "Cuando paga todo, la deuda aparece como «Saldada».",
+        ],
+        go: { label: "Ir a Fiao", tab: "fiao", target: "table" },
+      },
+      {
+        q: "¿Cómo activo los recordatorios por WhatsApp?",
+        steps: [
+          "Pídele permiso al cliente para escribirle.",
+          "Edita el cliente y marca «Autoriza recordatorios por WhatsApp».",
+          "En Clientes, el botón «WhatsApp» se activa cuando el cliente debe. Abre WhatsApp con el mensaje listo para enviar.",
+        ],
+        note: "Sin la autorización del cliente, el botón queda desactivado.",
+        go: { label: "Ir a Clientes", tab: "clientes", target: "table" },
+      },
+      {
+        q: "¿Cómo cambio el límite de crédito?",
+        steps: [
+          "En Clientes toca «Editar», cambia el límite y guarda.",
+          "No puede quedar por debajo de lo que el cliente ya debe.",
+        ],
+        role: "manager",
+        go: { label: "Ir a Clientes", tab: "clientes", target: "table" },
+      },
+    ],
+  },
+  {
+    id: "equipo",
+    title: "Tu equipo",
+    icon: "equipo",
+    items: [
+      {
+        q: "¿Cómo le creo una cuenta a mi cajero?",
+        steps: [
+          "En Mi equipo, escribe su nombre, su correo y una contraseña inicial de 12 caracteres o más.",
+          "Elige el rol y toca «Crear empleado».",
+          "Entrégale su correo y contraseña: entra desde la misma pantalla de inicio.",
+        ],
+        role: "owner",
+        go: { label: "Agregar empleado", tab: "equipo", target: "#employee-form" },
+      },
+      {
+        q: "¿Qué puede hacer cada rol?",
+        steps: [
+          "Cajero: vende, fía, registra abonos y agrega clientes.",
+          "Administrador: además maneja inventario, reportes y facturación.",
+          "Dueño: todo lo anterior y además administra el equipo.",
+        ],
+      },
+      {
+        q: "¿Cómo le quito el acceso a alguien?",
+        steps: [
+          "En Mi equipo toca «Desactivar» junto a su nombre.",
+          "Pierde el acceso de inmediato y puedes volver a activarlo luego.",
+        ],
+        role: "owner",
+        go: { label: "Ir a Mi equipo", tab: "equipo", target: ".ledger" },
+      },
+    ],
+  },
+  {
+    id: "facturacion",
+    title: "Facturación electrónica",
+    icon: "fiscal",
+    items: [
+      {
+        q: "¿Cómo preparo mi colmado para la facturación electrónica?",
+        steps: [
+          "En Facturación, completa el RNC, la razón social y la dirección del colmado.",
+          "Sigue los pasos de incorporación y márcalos a medida que los completas.",
+          "Mira si te alcanza el Facturador Gratuito de la DGII (hasta 150 facturas al mes) o si necesitas un proveedor.",
+        ],
+        note: "SysCol todavía no emite e-CF; te ayuda a organizar tus datos y tus ventas.",
+        role: "manager",
+        go: { label: "Ir a Facturación", tab: "fiscal", target: "#fiscal-form" },
+      },
+      {
+        q: "¿Cómo marco un producto exento de ITBIS?",
+        steps: [
+          "En Inventario toca «Editar producto».",
+          "En «ITBIS incluido en el precio» elige «Exento» y guarda.",
+        ],
+        note: "Los productos nuevos empiezan con 18 %. Muchos alimentos básicos están exentos.",
+        role: "manager",
+        go: { label: "Ir a Inventario", tab: "inventario", target: "#product-form" },
+      },
+      {
+        q: "Un cliente me pide factura con su RNC",
+        steps: [
+          "Edita el cliente y escribe su RNC o cédula y su razón social.",
+          "Véndele seleccionándolo en la cuenta; su RNC sale en la exportación de ventas.",
+        ],
+        go: { label: "Ir a Clientes", tab: "clientes", target: "#customer-form" },
+      },
+      {
+        q: "¿Cómo le paso mis ventas al contador o al proveedor?",
+        steps: [
+          "En Facturación (o en Reportes), elige las fechas.",
+          "Toca «Descargar CSV». El archivo abre en Excel o Google Sheets.",
+        ],
+        role: "manager",
+        go: { label: "Ir a Facturación", tab: "fiscal", target: "#fiscal-form" },
+      },
+    ],
+  },
+  {
+    id: "cuenta",
+    title: "Tu cuenta",
+    icon: "clientes",
+    items: [
+      {
+        q: "¿Por qué tengo que entrar otra vez al recargar la página?",
+        steps: [
+          "Por seguridad, la sesión no se guarda en el navegador.",
+          "Al recargar o cerrar la pestaña, vuelve a entrar con tu correo y contraseña.",
+        ],
+      },
+      {
+        q: "¿Mis datos los ven otros colmados?",
+        steps: ["No. Cada colmado tiene sus datos separados y solo los ven las personas de tu equipo."],
+      },
+    ],
+  },
+];
